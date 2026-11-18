@@ -65,9 +65,11 @@ def assess(pid: str,provider: str,template: str,source: Path) -> tuple[str,dict]
     selected,index_coverage=context_batches(pid,source,max_batches=2)
     docs['coverage']=index_coverage
     if provider!='demo':
+        valid_modules=inv.get('modules',[])
         prompt=(template+'\n\nDevuelve exclusivamente JSON: '
                 '{"recommendations":[{"module":"nombre","strategy":"Keep|Stabilize|Encapsulate|Refactor|Rewrite",'
                 '"reason":"justificación","evidence":[{"file":"ruta","line":1}]}],"questions":[]}. '
+                f'Usa exactamente uno de estos nombres válidos en "module": {json.dumps(valid_modules,ensure_ascii=False)}. '
                 'No inventes métricas ni evidencia. Solo analiza este material:\n'+
                 '# Hallazgos estáticos\n'+json.dumps(reported_findings[:80],ensure_ascii=False)+
                 '\n# Understand resumido\n'+str(knowledge.get('summary',''))[:1800]+
@@ -81,18 +83,28 @@ def assess(pid: str,provider: str,template: str,source: Path) -> tuple[str,dict]
             docs['limits'].append('La IA no devolvió JSON válido; solo se conservan hallazgos estáticos.')
         else:
             index={x['path']:x for x in inv.get('file_index',[])}
+            module_set=set(valid_modules)
             for suggestion in (parsed.get('recommendations') if isinstance(parsed.get('recommendations'),list) else [])[:35]:
                 if not isinstance(suggestion,dict):continue
                 strategy=suggestion.get('strategy');module=suggestion.get('module')
                 if strategy not in {'Keep','Stabilize','Encapsulate','Refactor','Rewrite'} or not isinstance(module,str):continue
-                if module not in inv.get('modules',[]):continue
                 why=suggestion.get('reason','')
                 if not isinstance(why,str) or not why.strip():continue
                 evidence=_evidence(suggestion.get('evidence'),index)
                 if not evidence:continue  # Avoid fabricating source support.
+                if module not in module_set:
+                    if module in index and index[module].get('module') in module_set:
+                        module=index[module]['module']
+                    elif index.get(evidence[0]['file'],{}).get('module') in module_set:
+                        module=index[evidence[0]['file']]['module']
+                    else:
+                        continue
                 docs['ai_suggestions'].append({'id':hashlib.sha256(f'{sid}:assess:{module}:{why}'.encode()).hexdigest()[:20],
                    'module':module,'strategy':strategy,'reason':why[:500],
                    'evidence':evidence,'source':'ai_inference','requires_review':True})
+            questions=[q.strip()[:300] for q in (parsed.get('questions') if isinstance(parsed.get('questions'),list) else []) if isinstance(q,str) and q.strip()][:15]
+            if questions:
+                docs['questions']=questions
     docs['status']='completed'
     db.analysis_put(pid,sid,'assess',docs)
     for suggestion in docs['ai_suggestions']:
@@ -110,6 +122,8 @@ def assess(pid: str,provider: str,template: str,source: Path) -> tuple[str,dict]
     lines+=['','## Recomendaciones de IA (pendientes de revisión)']
     lines.extend(f"- **{r['module']} — {r['strategy']}**: {r['reason']}" for r in docs['ai_suggestions'])
     if not docs['ai_suggestions']:lines.append('- Ninguna propuesta de IA con referencias localizables.')
+    if docs.get('questions'):
+        lines+=['','## Dudas de evaluación']+[f'- {q}' for q in docs['questions']]
     lines+=['','## Criterio de puntuación','No se asigna Confidence Score ni nota de calidad sin un baseline comparable y metodología validada.',
             '', '## Límites de la evaluación']+[f'- {note}' for note in docs['limits']]
     workspace.save_artifact(pid,'assessment.json',json.dumps(docs,ensure_ascii=False,indent=2))

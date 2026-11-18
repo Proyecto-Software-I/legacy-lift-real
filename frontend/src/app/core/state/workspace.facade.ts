@@ -521,7 +521,7 @@ export class WorkspaceFacade {
     try {
       const token=this.session.token;
       if (!token) return;
-      const response=await fetch(`/api/projects/${pid}/events?after=${this.lastEventId}`, {
+      const response=await fetch(this.api.eventsUrl(pid, this.lastEventId), {
         headers:{Authorization:`Bearer ${token}`},signal:controller.signal,cache:'no-store'
       });
       if (!response.ok || !response.body) return; // Polling remains as fallback.

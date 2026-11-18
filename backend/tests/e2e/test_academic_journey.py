@@ -136,12 +136,25 @@ def full_journey(client, system, provider):
 
     draft = call(client, "GET", f"/api/projects/{pid}/blueprints/current").json()["blueprint"]
     blueprint = draft["data"]
+    if provider != "demo":
+        understand_doc = call(client, "GET", f"/api/projects/{pid}/artifacts/understand.json").json()
+        assert understand_doc.get("invalid_ai_batches") == 0, f"Lotes inválidos en Understand: {understand_doc}"
+        assert understand_doc.get("business_rules"), f"Understand sin reglas de negocio de IA: {understand_doc}"
+
+        assess_doc = call(client, "GET", f"/api/projects/{pid}/artifacts/assessment.json").json()
+        assert assess_doc.get("ai_suggestions"), f"Assess sin recomendaciones de IA: {assess_doc}"
+
+        assert "no entregó un Blueprint JSON validable" not in (blueprint.get("notes") or ""), (
+            f"Plan cayó en fallback estático: {blueprint.get('notes')}"
+        )
     # Model-produced plans are advisory. The academic test explicitly selects
     # one supported Refactor wave so the same known scenario is executable.
     wave = blueprint["waves"][0]
     wave["strategy"] = "Refactor"
+    wave["goal"] = "Refactorizar calculator.py (legibilidad, simplificación segura o tipado/docstring) sin alterar total(x)."
     wave["files"] = ["calculator.py"]
     wave["depends_on"] = []
+    wave["acceptance_criteria"] = "Se simplifica o mejora calculator.py conservando el contrato y pruebas de total(x)."
     saved = call(client, "PATCH", f"/api/projects/{pid}/blueprints/current",
                  json={"data": blueprint}).json()
     wave_id = saved["data"]["waves"][0]["id"]

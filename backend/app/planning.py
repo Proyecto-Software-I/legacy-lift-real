@@ -52,11 +52,22 @@ def _source_files(pid: str) -> tuple[set[str], dict[str,str]]:
     return files,languages
 
 
+def _text_value(value: object, joiner: str = '; ') -> str | None:
+    if isinstance(value, str):
+        return value.strip()
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        joined = joiner.join(item.strip() for item in value if item.strip())
+        return joined
+    return None
+
+
 def validate(pid: str, data: dict) -> dict:
     if not isinstance(data,dict): raise ValueError('Blueprint debe ser un objeto JSON')
-    name=data.get('title'); target=data.get('target_architecture'); waves=data.get('waves')
-    if not isinstance(name,str) or not 3<=len(name.strip())<=140:raise ValueError('Título inválido')
-    if not isinstance(target,str) or not 10<=len(target.strip())<=2500:raise ValueError('Arquitectura objetivo inválida')
+    name=_text_value(data.get('title'), ' ')
+    target=_text_value(data.get('target_architecture'), '\n')
+    waves=data.get('waves')
+    if not name or not 3<=len(name)<=140:raise ValueError('Título inválido')
+    if not target or not 10<=len(target)<=2500:raise ValueError('Arquitectura objetivo inválida')
     if not isinstance(waves,list) or not 1<=len(waves)<=30:raise ValueError('Se requieren entre 1 y 30 waves')
     files,langs=_source_files(pid)
     seen=set();out=[]
@@ -71,17 +82,22 @@ def validate(pid: str, data: dict) -> dict:
             raise ValueError(f'Dependencias inválidas o cíclicas en {wid}; waves deben estar en orden topológico')
         strategy=wave.get('strategy')
         if strategy not in STRATEGIES:raise ValueError(f'Estrategia no soportada: {strategy}')
-        for key in ('goal','acceptance_criteria','risk'):
-            value=wave.get(key)
-            if not isinstance(value,str) or not 4<=len(value.strip())<=1200:raise ValueError(f'{key} inválido en {wid}')
+        normalized={}
+        for key, limit in (('goal', 1200), ('acceptance_criteria', 2000), ('risk', 1200)):
+            value=_text_value(wave.get(key))
+            if not value or not 4<=len(value)<=limit:raise ValueError(f'{key} inválido en {wid}')
+            normalized[key]=value
         priority=wave.get('priority',2)
-        if not isinstance(priority,int) or priority not in (1,2,3):raise ValueError('Prioridad debe ser 1, 2 o 3')
-        out.append({'id':wid,'goal':wave['goal'].strip(),'strategy':strategy,'files':scope,
-                    'depends_on':deps,'priority':priority,'risk':wave['risk'].strip(),
-                    'acceptance_criteria':wave['acceptance_criteria'].strip()})
-    return {'schema_version':1,'title':name.strip(),'target_architecture':target.strip(),
+        if isinstance(priority,str) and priority.strip() in {'1','2','3'}:
+            priority=int(priority.strip())
+        if isinstance(priority,bool) or not isinstance(priority,int) or priority not in (1,2,3):raise ValueError('Prioridad debe ser 1, 2 o 3')
+        out.append({'id':wid,'goal':normalized['goal'],'strategy':strategy,'files':scope,
+                    'depends_on':deps,'priority':priority,'risk':normalized['risk'],
+                    'acceptance_criteria':normalized['acceptance_criteria']})
+    notes=_text_value(data.get('notes',''), '\n')
+    return {'schema_version':1,'title':name,'target_architecture':target,
             'source_snapshot_id':db.project_get(pid)['active_snapshot_id'],
-            'waves':out,'notes':str(data.get('notes',''))[:2000],
+            'waves':out,'notes':(notes if notes is not None else str(data.get('notes','')))[:2000],
             'limitations':'Las waves son propuestas. Un pack y aprobación humana determinan ejecutabilidad.'}
 
 
@@ -153,18 +169,19 @@ def proposal(pid: str, notes: str = '', provider: str = 'demo') -> dict:
             if len(waves)>=30:break
         if len(waves)>=30:break
     if provider in {'claude','codex'}:
+        from .analysis.understanding import _json_object
         # The parser requires valid structured data, not a prose summary that we guess about.
         # AI can propose multiple waves and migration strategies, but validate() checks paths.
-        begin=notes.find('{');end=notes.rfind('}')
-        if begin>=0 and end>begin:
+        parsed=_json_object(notes)
+        failure_reason='respuesta no es un JSON válido'
+        if parsed is not None:
             try:
-                parsed=json.loads(notes[begin:end+1])
-                if isinstance(parsed,dict):
-                    parsed['notes']='Propuesta generada por IA, pendiente de aprobación humana.'
-                    return save_revision(pid,parsed)
-            except (json.JSONDecodeError,ValueError,TypeError):
-                pass
-        notes='La IA no entregó un Blueprint JSON validable; se generó un plan estático para edición manual.'
+                ai_notes=_text_value(parsed.get('notes',''), '\n') or ''
+                parsed['notes']=('Propuesta generada por IA, pendiente de aprobación humana.' + (f'\n{ai_notes}' if ai_notes else ''))[:2000]
+                return save_revision(pid,parsed)
+            except (ValueError,TypeError) as exc:
+                failure_reason=str(exc)[:180]
+        notes=f'La IA no entregó un Blueprint JSON validable ({failure_reason}); se generó un plan estático para edición manual.'
     else:
         notes='Propuesta estática, sin inferencias de IA. Requiere revisión humana.'
     return save_revision(pid,{'title':'Modernization Blueprint — '+project['name'],

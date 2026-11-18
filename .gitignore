@@ -6,6 +6,7 @@ node_modules/
 frontend/dist/
 data/
 backend/data/
+test-results/
 *.pyc
 .DS_Store
 

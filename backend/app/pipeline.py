@@ -68,7 +68,7 @@ def prompt_for(phase: str, pid: str) -> tuple[str, str]:
     elif phase == 'assess':
         details = inventory + '\n' + artifact(pid, 'understand.md')
     elif phase == 'plan':
-        details = artifact(pid, 'understand.md') + '\n' + artifact(pid, 'assessment.md')
+        details = inventory[:6000] + '\n' + artifact(pid, 'understand.md') + '\n' + artifact(pid, 'assessment.md')
     elif phase == 'modernize':
         wave=planning.executable_wave(pid)
         details='WAVE APROBADA (único alcance editable):\n'+json.dumps(wave,ensure_ascii=False) + '\n\n' + artifact(pid, 'baseline.md')

@@ -96,10 +96,19 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   }));
 };
 
+export function resolveApiBase(raw?: string): string {
+  const runtime = (globalThis as { __LEGACYLIFT_CONFIG__?: { apiBaseUrl?: string } }).__LEGACYLIFT_CONFIG__?.apiBaseUrl;
+  const trimmed = (raw ?? runtime ?? '').trim().replace(/\/+$/, '');
+  return trimmed || '/api';
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
-  private base = '/api';
+  readonly base = resolveApiBase();
+  eventsUrl(pid: string, after: number): string {
+    return `${this.base}/projects/${pid}/events?after=${after}`;
+  }
   login(email: string, password: string): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${this.base}/auth/login`, {email, password});
   }
