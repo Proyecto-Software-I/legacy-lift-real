@@ -1023,7 +1023,8 @@ export class WorkspaceFacade {
     if (!this.selected) return;
     this.api.export(this.selected.id).subscribe({next: blob=>{
       const url=URL.createObjectURL(blob);
-      const el=document.createElement('a');el.href=url;el.download='legacylift-evidencias.zip';el.click();
+      const name=this.selected?.migration_decision==='approved'?'legacylift-entrega-completa.zip':'legacylift-evidencias.zip';
+      const el=document.createElement('a');el.href=url;el.download=name;el.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
     }, error:e=>this.showError(e)});
   }

@@ -46,8 +46,8 @@ export class PhaseActionsComponent {
 
     if (section === 'evidence') {
       return g('done', 'Modernización completada',
-        `${p.artifacts?.length || 0} artefactos generados. Descarga el paquete o revisa cada documento abajo.`,
-        {primary: {kind:'download', label:'Descargar evidencias (ZIP)', icon:'download'}});
+        `El proyecto modernizado está listo junto a ${p.artifacts?.length || 0} documentos de evidencia. El paquete completo incluye código, parche, informe y documentación.`,
+        {primary: {kind:'download', label:'Descargar paquete completo', icon:'download'}});
     }
 
     const step = vm.activeStep;

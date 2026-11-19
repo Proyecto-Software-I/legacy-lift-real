@@ -569,12 +569,13 @@ def get_artifact(pid: str, filename: str, user: dict = Depends(current_user)) ->
 @app.get('/api/projects/{pid}/export')
 def export(pid: str, user: dict = Depends(current_user)) -> Response:
     project = ensure_project(pid, user)
+    # Approved migration: full delivery (modernized code + migration evidence + analysis docs).
     if project['migration_decision'] == 'approved' and migration_runs.history(pid):
-        payload,_,_ = migration_delivery.export(pid,'zip')
+        payload,_,name = migration_delivery.export(pid,'zip',include_docs=True)
     else:
-        payload = workspace.export_zip(pid,False)
+        payload,name = workspace.export_zip(pid,False),'legacylift-evidencias.zip'
     return Response(payload, media_type='application/zip',
-                    headers={'Content-Disposition': 'attachment; filename="legacylift-evidencias.zip"'})
+                    headers={'Content-Disposition': f'attachment; filename="{name}"'})
 
 
 class OrganizationCreate(BaseModel):
