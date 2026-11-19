@@ -31,7 +31,7 @@
   </ol>
 
   <div class="waves-heading"><h4>Waves propuestas</h4><span>{{plan.data.waves.length}} {{plan.data.waves.length===1?'wave':'waves'}} · máximo cinco archivos por wave</span></div>
-  <div class="panel info" *ngIf="plan.status!=='approved' && plan.status!=='rejected'" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+  <div class="panel info approve-callout" *ngIf="plan.status!=='approved' && plan.status!=='rejected'">
     <span>Aprueba esta revisión del Blueprint para habilitar los botones de <strong>Aprobar esta wave</strong>.</span>
     <button llButton variant="primary" size="sm" type="button" (click)="vm.planDecision(true)" [disabled]="vm.isAnyRunning || vm.planBusy || !hasExecutable">{{vm.planBusy?'Aprobando…':'Aprobar Blueprint'}}</button>
   </div>
