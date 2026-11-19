@@ -8,6 +8,7 @@ import (
 
 	tea "charm.land/bubbletea/v2"
 	"charm.land/lipgloss/v2"
+	"github.com/charmbracelet/x/ansi"
 )
 
 var (
@@ -106,26 +107,60 @@ func (m *model) icon(i int) string {
 	}
 }
 
+// lastLines hard-wraps s to width cells and returns its last n lines.
 func lastLines(s string, n, width int) string {
 	s = strings.TrimRight(s, "\n")
-	var lines []string
-	for _, l := range strings.Split(s, "\n") {
-		for width > 4 && lipgloss.Width(l) > width {
-			lines = append(lines, l[:width])
-			l = l[width:]
-		}
-		lines = append(lines, l)
+	if width > 4 {
+		s = ansi.Hardwrap(s, width, true)
 	}
+	lines := strings.Split(s, "\n")
 	if len(lines) > n {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n")
 }
 
+// Minimum terminal size for the full block-art logo; smaller terminals (such
+// as 80x24) get the one-line compact brand so the phase panels still fit.
+const (
+	fullLogoMinWidth  = 56
+	fullLogoMinHeight = 30
+)
+
+// header renders the brand block: the logo, the tagline and the project/model
+// line. The model string is shown verbatim.
+func (m *model) header() string {
+	fits := func(s string) bool { return m.width <= 0 || lipgloss.Width(s) <= m.width }
+	var lines []string
+	if m.width >= fullLogoMinWidth && m.height >= fullLogoMinHeight {
+		lines = append(lines, Logo(m.width), "")
+		if tag := titleStyle.Render("LegacyLift AI") + dimStyle.Render("  ·  "+Tagline); fits(tag) {
+			lines = append(lines, tag)
+		} else {
+			lines = append(lines, dimStyle.Render(Tagline))
+		}
+	} else if l := LogoCompact() + "  " + dimStyle.Render(Tagline); fits(l) {
+		lines = append(lines, l)
+	} else {
+		lines = append(lines, LogoCompact(), dimStyle.Render(Tagline))
+	}
+	proj, mdl := "proyecto: "+m.root, "modelo: "+m.model
+	if meta := proj + "   " + mdl; fits(meta) {
+		lines = append(lines, dimStyle.Render(meta))
+	} else {
+		wrap := dimStyle
+		if m.width > 0 {
+			wrap = wrap.Width(m.width)
+		}
+		lines = append(lines, wrap.Render(proj), wrap.Render(mdl))
+	}
+	return strings.Join(lines, "\n") + "\n\n"
+}
+
 func (m *model) View() tea.View {
 	var b strings.Builder
-	b.WriteString(titleStyle.Render("LegacyLift AI") + dimStyle.Render("  ·  Understand first. Modernize safely.") + "\n")
-	b.WriteString(dimStyle.Render(fmt.Sprintf("proyecto: %s   modelo: %s", m.root, m.model)) + "\n\n")
+	head := m.header()
+	b.WriteString(head)
 
 	var list strings.Builder
 	for i, p := range m.phases {
@@ -141,9 +176,12 @@ func (m *model) View() tea.View {
 	if w < 30 {
 		w = 30
 	}
-	h := m.height - 9
-	if h < 8 {
-		h = 8
+	// Lines left for streamed output: the terminal height minus the header,
+	// the output box chrome (two borders and its title), the footer and one
+	// spare line so the alt screen never scrolls.
+	h := m.height - (lipgloss.Height(head) - 1) - 3 - 1 - 1
+	if minH := lipgloss.Height(left) - 3; h < minH {
+		h = minH
 	}
 	cur := m.phases[m.current]
 	body := m.output[m.current]
@@ -153,7 +191,10 @@ func (m *model) View() tea.View {
 	if strings.TrimSpace(body) == "" {
 		body = dimStyle.Render("Esperando respuesta del modelo…")
 	}
-	right := boxStyle.Width(w).Render(titleStyle.Render(cur.Title) + dimStyle.Render("  → "+cur.Artifact()) + "\n" + lastLines(body, h, w-2))
+	// The box width includes its border and padding, leaving w-4 cells of text.
+	inner := w - 4
+	title := ansi.Truncate(titleStyle.Render(cur.Title)+dimStyle.Render("  → "+cur.Artifact()), inner, "…")
+	right := boxStyle.Width(w).Render(title + "\n" + lastLines(body, h, inner))
 	b.WriteString(lipgloss.JoinHorizontal(lipgloss.Top, left, " ", right) + "\n")
 
 	switch {
@@ -194,6 +235,7 @@ func RunTUI(ctx context.Context, r *Runner, modelName string) error {
 // RunPlain runs the phases printing progress lines (no TUI), for CI or
 // non-terminal use.
 func RunPlain(ctx context.Context, r *Runner, w func(string)) error {
+	w(BannerPlain)
 	return r.Run(ctx, func(e Event) {
 		if e.Chunk != "" {
 			return
