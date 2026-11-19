@@ -1,6 +1,6 @@
 import { Injectable, inject, signal } from '@angular/core';
 import { HttpErrorResponse } from '@angular/common/http';
-import { Subscription, interval } from 'rxjs';
+import { Subscription, firstValueFrom, interval } from 'rxjs';
 import { marked } from 'marked';
 import { ApiService, Project, Provider, Run, Snapshot, IngestJob, DiscoverData, ScanProgress, SourceFile, ReviewItem, AssessmentData, Blueprint, BlueprintData, PackCatalog, MigrationWave, BaselinePreflight, MigrationAttempt, MigrationReviewSummary } from '../api/api.service';
 import { StageView } from '../models/pipeline-stage';
@@ -939,12 +939,35 @@ export class WorkspaceFacade {
   loadPacks(pid:string):void {
     this.api.migrationPacks(pid).subscribe({next:r=>{if(this.selected?.id===pid)this.packs=r;},error:()=>{/* existing endpoints stay available */}});
   }
-  waveDecision(wid:string,approved:boolean):void {
+  async waveDecision(wid:string,approved:boolean):Promise<void> {
     if(!this.selected||this.planBusy)return;const pid=this.selected.id;this.planBusy=true;this.pendingWaveId=wid;
-    this.api.decideWave(pid,wid,approved).subscribe({next:r=>{
-      this.planBusy=false;this.pendingWaveId=null;this.blueprint=r;this.blueprintDraft=structuredClone(r.data);this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.refreshSelected();this.loadBaselinePreflight(pid);this.loadMigration(pid);
-      this.toast(approved?'Wave aprobada y seleccionada. Puedes ejecutar Baseline.':'Wave rechazada.');
-    },error:e=>this.showError(e)});
+    try {
+      const order:string[]=[];
+      if(approved && this.blueprint){
+        const waves=new Map(this.blueprint.data.waves.map(w=>[w.id,w]));
+        const approvals=this.blueprint.wave_approvals||{};
+        const seen=new Set<string>();
+        const visit=(id:string)=>{
+          if(seen.has(id))return;seen.add(id);
+          for(const dep of waves.get(id)?.depends_on||[])visit(dep);
+          if(id===wid || approvals[id]!=='approved')order.push(id);
+        };
+        visit(wid);
+      } else {
+        order.push(wid);
+      }
+      let latest=this.blueprint;
+      for(const id of order){
+        latest=await firstValueFrom(this.api.decideWave(pid,id,approved));
+      }
+      if(latest){this.blueprint=latest;this.blueprintDraft=structuredClone(latest.data);}
+      this.planBusy=false;this.pendingWaveId=null;this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';
+      this.refreshSelected();this.loadBaselinePreflight(pid);this.loadMigration(pid);
+      const isKeep=this.blueprint?.data.waves.find(w=>w.id===wid)?.strategy==='Keep';
+      this.toast(!approved?'Wave rechazada.':isKeep?'Wave Keep confirmada; ya puedes aprobar las waves dependientes.':'Wave aprobada y seleccionada. Puedes ejecutar Baseline.');
+    } catch(e) {
+      this.showError(e);
+    }
   }
   selectWave(wid:string):void {
     if(!this.selected||this.planBusy)return;const pid=this.selected.id;this.planBusy=true;this.pendingWaveId=wid;
