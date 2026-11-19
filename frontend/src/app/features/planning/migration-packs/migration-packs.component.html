@@ -31,8 +31,12 @@
   </ol>
 
   <div class="waves-heading"><h4>Waves propuestas</h4><span>{{plan.data.waves.length}} {{plan.data.waves.length===1?'wave':'waves'}} · máximo cinco archivos por wave</span></div>
+  <div class="panel info" *ngIf="plan.status!=='approved' && plan.status!=='rejected'" style="display:flex;align-items:center;justify-content:space-between;gap:12px;margin-bottom:12px">
+    <span>Aprueba esta revisión del Blueprint para habilitar los botones de <strong>Aprobar esta wave</strong>.</span>
+    <button llButton variant="primary" size="sm" type="button" (click)="vm.planDecision(true)" [disabled]="vm.isAnyRunning || vm.planBusy || !hasExecutable">{{vm.planBusy?'Aprobando…':'Aprobar Blueprint'}}</button>
+  </div>
   <div class="wave-list">
-    <article *ngFor="let wave of plan.data.waves" class="wave-item" [class.active]="vm.selected.active_wave_id===wave.id" [class.blocked]="!vm.packMatch(wave).compatible">
+    <article *ngFor="let wave of plan.data.waves" class="wave-item" [class.active]="vm.selected.active_wave_id===wave.id" [class.blocked]="!vm.packMatch(wave).compatible && wave.strategy!=='Keep'">
       <div class="wave-header">
         <div class="wave-title"><span class="wave-id mono">{{wave.id}}</span><strong>{{wave.goal}}</strong></div>
         <ll-status-badge *ngIf="vm.selected.active_wave_id===wave.id; else waveState" status="active" label="Seleccionada"/>
@@ -61,20 +65,30 @@
         <span *ngIf="!vm.packMatch(wave).compatible && wave.strategy!=='Keep'">No ejecutable: {{vm.packMatch(wave).reason}}<ng-container *ngIf="vm.strategyOptions(wave).length"> Puedes cambiar la estrategia abajo.</ng-container></span>
       </p>
       <div class="actions">
-        <button *ngFor="let option of vm.strategyOptions(wave)" llButton variant="secondary" size="sm" type="button" (click)="vm.adoptStrategy(wave.id, option)"
-          [disabled]="vm.blueprintSaving || vm.isAnyRunning || vm.selected.active_wave_id===wave.id"
-          [title]="'Guarda una nueva revisión con la estrategia '+option">
-          <ll-icon [name]="option==='LanguageMigration' ? 'translate' : 'build'" size="sm"/> {{vm.strategyLabel(option)}}</button>
         <button *ngIf="plan.status==='approved' && wave.strategy==='Keep' && plan.wave_approvals[wave.id]!=='approved'" llButton variant="secondary" size="sm" type="button"
           [disabled]="vm.isAnyRunning || vm.planBusy" (click)="vm.waveDecision(wave.id,true)" title="Keep no ejecuta cambios: confirma la decisión y desbloquea las waves que dependen de esta">
           <ll-icon name="check" size="sm"/> {{vm.pendingWaveId===wave.id?'Confirmando…':'Confirmar sin cambios'}}</button>
         <ng-container *ngIf="plan.status==='approved' && vm.packMatch(wave).compatible && vm.selected.active_wave_id!==wave.id">
-          <button *ngIf="plan.wave_approvals[wave.id]!=='approved'" llButton variant="secondary" size="sm" type="button" [disabled]="vm.isAnyRunning || vm.planBusy" (click)="vm.waveDecision(wave.id,true)">
+          <button *ngIf="plan.wave_approvals[wave.id]!=='approved'" llButton variant="primary" size="sm" type="button" [disabled]="vm.isAnyRunning || vm.planBusy" (click)="vm.waveDecision(wave.id,true)">
             <ll-icon name="check" size="sm"/> {{vm.pendingWaveId===wave.id?'Aprobando…':'Aprobar esta wave'}}</button>
-          <button *ngIf="plan.wave_approvals[wave.id]==='approved'" llButton variant="secondary" size="sm" type="button" [disabled]="vm.isAnyRunning || vm.planBusy" (click)="vm.selectWave(wave.id)">{{vm.pendingWaveId===wave.id?'Seleccionando…':'Seleccionar'}}</button>
+          <button *ngIf="plan.wave_approvals[wave.id]==='approved'" llButton variant="primary" size="sm" type="button" [disabled]="vm.isAnyRunning || vm.planBusy" (click)="vm.selectWave(wave.id)">{{vm.pendingWaveId===wave.id?'Seleccionando…':'Seleccionar'}}</button>
+        </ng-container>
+        <ng-container *ngIf="!vm.packMatch(wave).compatible && wave.strategy!=='Keep'">
+          <button *ngFor="let option of vm.strategyOptions(wave)" llButton variant="secondary" size="sm" type="button" (click)="vm.adoptStrategy(wave.id, option)"
+            [disabled]="vm.blueprintSaving || vm.isAnyRunning || vm.selected.active_wave_id===wave.id"
+            [title]="'Guarda una nueva revisión con la estrategia '+option">
+            <ll-icon [name]="option==='LanguageMigration' ? 'translate' : 'build'" size="sm"/> {{vm.strategyLabel(option)}}</button>
         </ng-container>
         <small class="muted" *ngIf="plan.status==='approved' && plan.wave_approvals[wave.id]!=='approved' && missingDeps(wave).length">Confirmará también: {{missingDeps(wave).join(', ')}}</small>
       </div>
+      <details class="disclosure" *ngIf="(vm.packMatch(wave).compatible || wave.strategy==='Keep') && vm.strategyOptions(wave).length && vm.selected.active_wave_id!==wave.id">
+        <summary>Cambiar estrategia (crea una nueva revisión y vuelve a pedir aprobar el Blueprint)</summary>
+        <div class="actions">
+          <button *ngFor="let option of vm.strategyOptions(wave)" llButton variant="ghost" size="sm" type="button" (click)="vm.adoptStrategy(wave.id, option)"
+            [disabled]="vm.blueprintSaving || vm.isAnyRunning">
+            <ll-icon [name]="option==='LanguageMigration' ? 'translate' : 'build'" size="sm"/> {{vm.strategyLabel(option)}}</button>
+        </div>
+      </details>
     </article>
   </div>
   <details class="disclosure catalog" *ngIf="vm.packs as catalog">
