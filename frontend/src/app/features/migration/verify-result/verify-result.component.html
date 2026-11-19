@@ -43,18 +43,18 @@
         </label>
         <div class="actions">
           <button *ngIf="v.classification!=='divergent'" llButton variant="primary" type="button" (click)="vm.migrationDecision(true)"
-            [disabled]="v.classification!=='verified_within_tests' && vm.migrationRiskReason.trim().length<20">
-            <ll-icon name="check" size="sm"/> Aprobar versión revisada</button>
-          <button llButton variant="danger" type="button" (click)="vm.migrationDecision(false)"><ll-icon name="close" size="sm"/> Rechazar intento</button>
+            [disabled]="vm.migrationBusy || (v.classification!=='verified_within_tests' && vm.migrationRiskReason.trim().length<20)">
+            <ll-icon name="check" size="sm"/> {{vm.migrationBusy?'Guardando…':'Aprobar versión revisada'}}</button>
+          <button llButton variant="danger" type="button" [disabled]="vm.migrationBusy" (click)="vm.migrationDecision(false)"><ll-icon name="close" size="sm"/> {{vm.migrationBusy?'Rechazando…':'Rechazar intento'}}</button>
         </div>
       </section>
 
       <section *ngIf="attempt.decision==='approved'" class="panel decision done" aria-labelledby="deliver-title">
         <h3 id="deliver-title">Versión aprobada · descarga los entregables</h3>
         <p class="muted">El código original sigue intacto. Estas descargas corresponden a la versión modernizada que revisaste.</p>
-        <div class="actions"><button llButton variant="secondary" type="button" (click)="vm.downloadMigration('zip')"><ll-icon name="archive" size="sm"/> Código modernizado (ZIP)</button>
-          <button llButton variant="secondary" type="button" (click)="vm.downloadMigration('patch')"><ll-icon name="difference" size="sm"/> Parche .patch</button>
-          <button llButton variant="secondary" type="button" (click)="vm.downloadMigration('report')"><ll-icon name="description" size="sm"/> Informe</button></div>
+        <div class="actions"><button llButton variant="secondary" type="button" [disabled]="!!vm.downloading" (click)="vm.downloadMigration('zip')"><ll-icon name="archive" size="sm"/> {{vm.downloading==='zip'?'Descargando…':'Código modernizado (ZIP)'}}</button>
+          <button llButton variant="secondary" type="button" [disabled]="!!vm.downloading" (click)="vm.downloadMigration('patch')"><ll-icon name="difference" size="sm"/> {{vm.downloading==='patch'?'Descargando…':'Parche .patch'}}</button>
+          <button llButton variant="secondary" type="button" [disabled]="!!vm.downloading" (click)="vm.downloadMigration('report')"><ll-icon name="description" size="sm"/> {{vm.downloading==='report'?'Descargando…':'Informe'}}</button></div>
       </section>
       <p *ngIf="attempt.decision==='rejected'" class="panel info">Rechazaste este intento. El historial y el código original se conservan; puedes solicitar otra iteración en Modernize.</p>
 

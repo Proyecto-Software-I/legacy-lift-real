@@ -11,7 +11,7 @@
   <div class="artifact-document" *ngIf="vm.artifactContent; else noArtifact">
     <div class="document-bar"><span class="mono">{{vm.artifactName}}</span>
       <button llButton variant="ghost" size="sm" type="button" (click)="vm.copyArtifact()" [disabled]="!vm.artifactContent"><ll-icon name="content_copy" size="sm"/> Copiar</button>
-      <button llButton variant="ghost" size="sm" type="button" (click)="vm.download()"><ll-icon name="download" size="sm"/> Exportar ZIP</button>
+      <button llButton variant="ghost" size="sm" type="button" [disabled]="!!vm.downloading" (click)="vm.download()"><ll-icon name="download" size="sm"/> {{vm.downloading==='evidence'?'Descargando…':'Exportar ZIP'}}</button>
     </div>
     <div *ngIf="vm.rendered;else plainText" class="markdown-view" [innerHTML]="vm.rendered"></div>
     <ng-template #plainText><pre class="raw-view">{{vm.artifactContent}}</pre></ng-template>

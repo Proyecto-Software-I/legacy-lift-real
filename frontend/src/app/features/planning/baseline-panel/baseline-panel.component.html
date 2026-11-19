@@ -47,8 +47,8 @@
         <div class="cases" *ngIf="info.proposals.length;else noProposals">
           <article class="case" *ngFor="let item of info.proposals"><div class="case-header"><strong>{{item.data.title}}</strong><ll-status-badge [status]="item.status"/></div>
             <p>Entrada: {{item.data.input}} · Esperado: {{item.data.expected}}</p><code>{{item.data.evidence_file}}</code>
-            <div class="actions"><button llButton variant="secondary" size="sm" type="button" (click)="vm.decideTestProposal(item.id,true)">Aprobar propuesta</button>
-              <button llButton variant="ghost" size="sm" type="button" (click)="vm.decideTestProposal(item.id,false)">Descartar</button></div>
+            <div class="actions"><button llButton variant="secondary" size="sm" type="button" [disabled]="vm.pendingProposalId===item.id" (click)="vm.decideTestProposal(item.id,true)">{{vm.pendingProposalId===item.id?'Guardando…':'Aprobar propuesta'}}</button>
+              <button llButton variant="ghost" size="sm" type="button" [disabled]="vm.pendingProposalId===item.id" (click)="vm.decideTestProposal(item.id,false)">{{vm.pendingProposalId===item.id?'Descartando…':'Descartar'}}</button></div>
           </article></div>
         <ng-template #noProposals><p class="caption" *ngIf="project.provider!=='demo'">Todavía no hay propuestas.</p></ng-template>
       </details>

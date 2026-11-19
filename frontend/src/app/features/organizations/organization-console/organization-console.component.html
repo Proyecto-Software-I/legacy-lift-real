@@ -17,7 +17,7 @@
     </div>
     <p *ngIf="usage() as u" class="muted">Plan: <b>{{u.plan.name}}</b>. No está conectada la facturación externa ni se procesan pagos.</p>
     <section *ngIf="report() as r" class="org-section">
-      <div class="org-section-title"><h3>Actividad y reportes</h3><button type="button" class="small-action" (click)="downloadReport()">Exportar CSV</button></div>
+      <div class="org-section-title"><h3>Actividad y reportes</h3><button type="button" class="small-action" [disabled]="busy()" (click)="downloadReport()">{{busy()?'Exportando…':'Exportar CSV'}}</button></div>
       <p>{{r.totals.snapshots}} snapshots · {{r.totals.runs}} análisis · {{r.totals.migration_attempts}} modernizaciones</p>
       <ul class="org-projects"><li *ngFor="let project of r.projects">{{project.name}} <small>· {{project.runs}} ejecuciones</small></li></ul>
     </section>
@@ -32,7 +32,7 @@
             <option value="viewer">Viewer</option><option value="developer">Developer</option>
             <option value="admin" [disabled]="selectedOrg?.role!=='owner'">Admin</option>
           </select>
-          <button type="button" class="small-action" (click)="remove(member)">Quitar</button>
+          <button type="button" class="small-action" [disabled]="busy()" (click)="remove(member)">Quitar</button>
         </ng-container>
       </div>
       <div class="org-actions">

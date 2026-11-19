@@ -127,6 +127,27 @@ export class WorkspaceFacade {
   private readonly _blueprintSaving = signal<boolean>(false);
   get blueprintSaving():boolean{return this._blueprintSaving();}
   set blueprintSaving(value:boolean){this._blueprintSaving.set(value);}
+  private readonly _planBusy = signal<boolean>(false);
+  get planBusy():boolean{return this._planBusy();}
+  set planBusy(value:boolean){this._planBusy.set(value);}
+  private readonly _pendingWaveId = signal<string|null>(null);
+  get pendingWaveId():string|null{return this._pendingWaveId();}
+  set pendingWaveId(value:string|null){this._pendingWaveId.set(value);}
+  private readonly _pendingProposalId = signal<string|null>(null);
+  get pendingProposalId():string|null{return this._pendingProposalId();}
+  set pendingProposalId(value:string|null){this._pendingProposalId.set(value);}
+  private readonly _migrationBusy = signal<boolean>(false);
+  get migrationBusy():boolean{return this._migrationBusy();}
+  set migrationBusy(value:boolean){this._migrationBusy.set(value);}
+  private readonly _downloading = signal<string|null>(null);
+  get downloading():string|null{return this._downloading();}
+  set downloading(value:string|null){this._downloading.set(value);}
+  private readonly _pendingJobId = signal<string|null>(null);
+  get pendingJobId():string|null{return this._pendingJobId();}
+  set pendingJobId(value:string|null){this._pendingJobId.set(value);}
+  private readonly _githubBusy = signal<boolean>(false);
+  get githubBusy():boolean{return this._githubBusy();}
+  set githubBusy(value:boolean){this._githubBusy.set(value);}
   private readonly _migrationAttempts=signal<MigrationAttempt[]>([]);
   get migrationAttempts():MigrationAttempt[]{return this._migrationAttempts();}
   set migrationAttempts(v:MigrationAttempt[]){this._migrationAttempts.set(v);}
@@ -145,7 +166,15 @@ export class WorkspaceFacade {
   private readonly _migrationWorkerSeen=signal<string|null>(null);
   get migrationWorkerSeen():string|null{return this._migrationWorkerSeen();}
   set migrationWorkerSeen(v:string|null){this._migrationWorkerSeen.set(v);}
-  get latestMigration():MigrationAttempt|undefined{return this.migrationAttempts[0];}
+  get latestMigration():MigrationAttempt|undefined{
+    const p=this.selected;
+    if(!p||!p.active_wave_id)return undefined;
+    return this.migrationAttempts.find(a=>
+      a.wave_id===p.active_wave_id
+      &&(!p.active_snapshot_id||a.snapshot_id===p.active_snapshot_id)
+      &&(!this.blueprint?.id||a.blueprint_id===this.blueprint.id)
+    );
+  }
   private readonly _stageId = signal<string>('discover');
   get stageId(): string { return this._stageId(); }
   set stageId(value: string) { this._stageId.set(value); }
@@ -292,6 +321,7 @@ export class WorkspaceFacade {
     this.artifactContent='';this.artifactName='';this.rendered='';this.showCreate=false;this.showEdit=false;this.showHelp=false;
     this.createName='';this.createSystem='';this.projectQuery='';this.stageId='discover';
     this.error='';this.notice='';this.busy=false;this.loadingProject=false;this.uploading=false;this.analysisBusy=false;
+    this.planBusy=false;this.pendingWaveId=null;this.pendingProposalId=null;this.migrationBusy=false;this.downloading=null;this.pendingJobId=null;this.githubBusy=false;
     this.sessionCheckFailed=false;
   }
 
@@ -447,6 +477,8 @@ export class WorkspaceFacade {
     const http = err as HttpErrorResponse;
     this.error = typeof http?.error?.detail === 'string' ? http.error.detail : http?.message || String(err);
     this.busy = false; this.uploading = false;
+    this.planBusy = false; this.pendingWaveId = null; this.pendingProposalId = null;
+    this.migrationBusy = false; this.downloading = null; this.pendingJobId = null; this.githubBusy = false;
   }
   private noticeTimer?: ReturnType<typeof setTimeout>;
   /** Confirmations are transient: they auto-dismiss so they never linger next to a newer state.
@@ -540,20 +572,25 @@ export class WorkspaceFacade {
     }});
   }
   connectGithub(): void {
+    if (this.githubBusy) return;
+    this.githubBusy = true;
     this.api.githubConnect().subscribe({next:r=>window.location.assign(r.url),error:e=>this.showError(e)});
   }
   disconnectGithub(): void {
-    this.api.githubDisconnect().subscribe({next:()=>{this.githubLogin='';this.githubRepos=[];this.toast('GitHub desconectado.');},error:e=>this.showError(e)});
+    if (this.githubBusy) return;
+    this.githubBusy = true;
+    this.api.githubDisconnect().subscribe({next:()=>{this.githubBusy=false;this.githubLogin='';this.githubRepos=[];this.toast('GitHub desconectado.');},error:e=>this.showError(e)});
   }
   editProject(): void {
     if (!this.selected) return;
     this.editName=this.selected.name;this.editSystem=this.selected.system_name;this.showEdit=true;
   }
   saveProject(): void {
-    if (!this.selected) return;
+    if (!this.selected || this.busy) return;
     const pid=this.selected.id;
+    this.busy=true;
     this.api.rename(pid,this.editName,this.editSystem).subscribe({next:()=>{
-      this.showEdit=false;this.refreshSelected();this.loadProjects();this.toast('Proyecto actualizado.');
+      this.busy=false;this.showEdit=false;this.refreshSelected();this.loadProjects();this.toast('Proyecto actualizado.');
     },error:e=>this.showError(e)});
   }
   create(): void {
@@ -634,15 +671,17 @@ export class WorkspaceFacade {
     }}});
   }
   retryJob(jid: string): void {
-    if (!this.selected) return;
+    if (!this.selected || this.pendingJobId) return;
+    this.pendingJobId=jid;
     this.api.retry(this.selected.id,jid).subscribe({next:()=>{
-      this.toast('Ingesta reintentada.');this.loadJobs(this.selected!.id);
+      this.pendingJobId=null;this.toast('Ingesta reintentada.');this.loadJobs(this.selected!.id);
     },error:e=>this.showError(e)});
   }
   cancelJob(jid: string): void {
-    if (!this.selected) return;
+    if (!this.selected || this.pendingJobId) return;
+    this.pendingJobId=jid;
     this.api.cancel(this.selected.id,jid).subscribe({next:()=>{
-      this.toast('Trabajo cancelado.');this.loadJobs(this.selected!.id);
+      this.pendingJobId=null;this.toast('Trabajo cancelado.');this.loadJobs(this.selected!.id);
     },error:e=>this.showError(e)});
   }
   private async connectEvents(pid: string): Promise<void> {
@@ -890,26 +929,26 @@ export class WorkspaceFacade {
     },error:e=>{this.baselineBusy=false;this.showError(e);}});
   }
   decideTestProposal(id:string,approved:boolean):void {
-    if(!this.selected)return;
-    const pid=this.selected.id;
+    if(!this.selected||this.pendingProposalId)return;
+    const pid=this.selected.id;this.pendingProposalId=id;
     this.api.baselineReview(pid,id,approved).subscribe({next:()=>{
-      this.loadBaselinePreflight(pid);this.toast(approved?'Caso propuesto aprobado (aún no se ejecuta automáticamente).':'Propuesta descartada.');
+      this.pendingProposalId=null;this.loadBaselinePreflight(pid);this.toast(approved?'Caso propuesto aprobado (aún no se ejecuta automáticamente).':'Propuesta descartada.');
     },error:e=>this.showError(e)});
   }
   loadPacks(pid:string):void {
     this.api.migrationPacks(pid).subscribe({next:r=>{if(this.selected?.id===pid)this.packs=r;},error:()=>{/* existing endpoints stay available */}});
   }
   waveDecision(wid:string,approved:boolean):void {
-    if(!this.selected)return;const pid=this.selected.id;
+    if(!this.selected||this.planBusy)return;const pid=this.selected.id;this.planBusy=true;this.pendingWaveId=wid;
     this.api.decideWave(pid,wid,approved).subscribe({next:r=>{
-      this.blueprint=r;this.blueprintDraft=structuredClone(r.data);this.refreshSelected();this.loadBaselinePreflight(pid);
+      this.planBusy=false;this.pendingWaveId=null;this.blueprint=r;this.blueprintDraft=structuredClone(r.data);this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.refreshSelected();this.loadBaselinePreflight(pid);this.loadMigration(pid);
       this.toast(approved?'Wave aprobada y seleccionada. Puedes ejecutar Baseline.':'Wave rechazada.');
     },error:e=>this.showError(e)});
   }
   selectWave(wid:string):void {
-    if(!this.selected)return;const pid=this.selected.id;
+    if(!this.selected||this.planBusy)return;const pid=this.selected.id;this.planBusy=true;this.pendingWaveId=wid;
     this.api.selectWave(pid,wid).subscribe({next:r=>{
-      this.blueprint=r;this.refreshSelected();this.loadBaselinePreflight(pid);this.toast('Wave seleccionada; baseline anterior invalidado.');
+      this.planBusy=false;this.pendingWaveId=null;this.blueprint=r;this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.refreshSelected();this.loadBaselinePreflight(pid);this.loadMigration(pid);this.toast('Wave seleccionada; baseline anterior invalidado.');
     },error:e=>this.showError(e)});
   }
   updateBlueprintDraft(data:BlueprintData):void {
@@ -944,9 +983,10 @@ export class WorkspaceFacade {
     },error:e=>{this.blueprintSaving=false;this.showError(e);}});
   }
   planDecision(approved:boolean): void {
-    if (!this.selected) return;
+    if (!this.selected || this.planBusy) return;
+    this.planBusy=true;
     this.api.plan(this.selected.id,approved).subscribe({
-      next:()=>{this.toast(approved?'Blueprint aprobado. Revisa y aprueba una wave antes de preparar el baseline.':'Plan rechazado.');this.refreshSelected();this.loadBlueprint(this.selected!.id);},
+      next:()=>{this.planBusy=false;this.toast(approved?'Blueprint aprobado. Revisa y aprueba una wave antes de preparar el baseline.':'Plan rechazado.');this.refreshSelected();this.loadBlueprint(this.selected!.id);},
       error:e=>this.showError(e)
     });
   }
@@ -987,22 +1027,25 @@ export class WorkspaceFacade {
     },error:e=>this.showError(e)});
   }
   retryMigration():void {
-    if(!this.selected||!this.latestMigration)return;
-    const pid=this.selected.id;
+    if(!this.selected||!this.latestMigration||this.migrationBusy)return;
+    const pid=this.selected.id;this.migrationBusy=true;
     this.api.migrationRetry(pid,this.latestMigration.id).subscribe({next:()=>{
-      this.toast('Nuevo intento encolado; requiere el worker separado.');this.refreshSelected();this.loadMigration(pid);
+      this.migrationBusy=false;this.toast('Nuevo intento encolado; requiere el worker separado.');this.refreshSelected();this.loadMigration(pid);
     },error:e=>this.showError(e)});
   }
   migrationDecision(approved:boolean):void {
-    if(!this.selected||!this.latestMigration)return;
+    if(!this.selected||!this.latestMigration||this.migrationBusy)return;
+    this.migrationBusy=true;
     this.api.decision(this.selected.id,approved,this.migrationRiskReason).subscribe({next:()=>{
-      this.toast(approved?'Candidato aprobado. Puedes descargar ZIP, parche e informe.':'Intento rechazado. Se conserva el historial.');
+      this.migrationBusy=false;this.toast(approved?'Candidato aprobado. Puedes descargar ZIP, parche e informe.':'Intento rechazado. Se conserva el historial.');
       this.migrationRiskReason='';this.refreshSelected();this.loadMigration(this.selected!.id);
     },error:e=>this.showError(e)});
   }
   downloadMigration(format:'zip'|'patch'|'report'):void {
-    if(!this.selected)return;
+    if(!this.selected||this.downloading)return;
+    this.downloading=format;
     this.api.migrationDelivery(this.selected.id,format).subscribe({next:blob=>{
+      this.downloading=null;
       const url=URL.createObjectURL(blob),a=document.createElement('a');
       a.href=url;a.download=format==='zip'?'legacylift-entrega.zip':format==='patch'?'legacylift-changes.patch':'legacylift-report.md';
       a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -1020,8 +1063,10 @@ export class WorkspaceFacade {
   copyArtifact(): void { if (this.artifactContent) navigator.clipboard.writeText(this.artifactContent)
       .then(()=>this.toast('Contenido copiado')).catch(()=>this.toast('No se pudo copiar; selecciona el texto manualmente.')); }
   download(): void {
-    if (!this.selected) return;
+    if (!this.selected || this.downloading) return;
+    this.downloading='evidence';
     this.api.export(this.selected.id).subscribe({next: blob=>{
+      this.downloading=null;
       const url=URL.createObjectURL(blob);
       const el=document.createElement('a');el.href=url;el.download='legacylift-evidencias.zip';el.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);

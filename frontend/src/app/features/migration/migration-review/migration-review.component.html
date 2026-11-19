@@ -12,7 +12,7 @@
     </dl>
     <p class="inline-error" *ngIf="attempt.error">{{attempt.error}}</p>
     <div *ngIf="attempt.status==='completed' && (attempt.decision==='rejected' || (attempt.verify_status==='completed' && attempt.verification?.classification==='divergent'))" class="retry">
-      <button llButton variant="secondary" type="button" (click)="vm.retryMigration()"><ll-icon name="restart_alt" size="sm"/> Solicitar otra iteración</button>
+      <button llButton variant="secondary" type="button" [disabled]="vm.migrationBusy" (click)="vm.retryMigration()"><ll-icon name="restart_alt" size="sm"/> {{vm.migrationBusy?'Encolando…':'Solicitar otra iteración'}}</button>
       <small>Crea un nuevo intento. Respeta el máximo de intentos configurado.</small>
     </div>
     <ng-container *ngIf="vm.migrationReview as review">

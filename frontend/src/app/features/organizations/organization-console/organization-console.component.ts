@@ -98,13 +98,16 @@ export class OrganizationConsoleComponent {
     this.api.updateMemberRole(id,user.id,role).subscribe({next:()=>this.load(),error:err=>this.failure(err)});
   }
   remove(user:OrganizationMember):void {
-    const id=this.selectedId();if(!id||!this.canManage||user.role==='owner')return;
+    const id=this.selectedId();if(!id||!this.canManage||user.role==='owner'||this.busy())return;
     if(!confirm('¿Quitar a '+user.display_name+' de esta organización?'))return;
-    this.api.removeMember(id,user.id).subscribe({next:()=>this.load(),error:err=>this.failure(err)});
+    this.busy.set(true);
+    this.api.removeMember(id,user.id).subscribe({next:()=>{this.busy.set(false);this.load();},error:err=>this.failure(err)});
   }
   downloadReport():void {
-    const id=this.selectedId();if(!id)return;
+    const id=this.selectedId();if(!id||this.busy())return;
+    this.busy.set(true);
     this.api.organizationReportCsv(id).subscribe({next:blob=>{
+      this.busy.set(false);
       const url=URL.createObjectURL(blob);const link=document.createElement('a');
       link.href=url;link.download='legacylift-reporte-proyectos.csv';link.click();
       URL.revokeObjectURL(url);

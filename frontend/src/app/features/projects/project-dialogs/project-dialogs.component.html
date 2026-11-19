@@ -38,6 +38,6 @@
   <form (ngSubmit)="vm.saveProject()" class="dialog-form">
     <div class="form-field"><label for="editName">Nombre</label><input id="editName" class="input" name="editName" [(ngModel)]="vm.editName" required minlength="3" maxlength="80"/></div>
     <div class="form-field"><label for="editSystem">Sistema legacy</label><input id="editSystem" class="input" name="editSystem" [(ngModel)]="vm.editSystem" required minlength="2" maxlength="80"/></div>
-    <div class="dialog-actions"><button llButton variant="ghost" type="button" (click)="vm.showEdit=false">Cancelar</button><button llButton variant="primary" type="submit" [disabled]="vm.busy || vm.editName.trim().length<3 || vm.editSystem.trim().length<2">Guardar cambios</button></div>
+    <div class="dialog-actions"><button llButton variant="ghost" type="button" (click)="vm.showEdit=false">Cancelar</button><button llButton variant="primary" type="submit" [disabled]="vm.busy || vm.editName.trim().length<3 || vm.editSystem.trim().length<2">{{vm.busy?'Guardando…':'Guardar cambios'}}</button></div>
   </form>
 </ll-dialog>

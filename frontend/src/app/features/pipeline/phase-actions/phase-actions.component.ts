@@ -47,7 +47,7 @@ export class PhaseActionsComponent {
     if (section === 'evidence') {
       return g('done', 'Modernización completada',
         `${p.artifacts?.length || 0} artefactos generados. Descarga el paquete o revisa cada documento abajo.`,
-        {primary: {kind:'download', label:'Descargar evidencias (ZIP)', icon:'download'}});
+        {primary: {kind:'download', label: vm.downloading==='evidence' ? 'Descargando…' : 'Descargar evidencias (ZIP)', icon:'download', disabled: !!vm.downloading}});
     }
 
     const step = vm.activeStep;
@@ -72,11 +72,11 @@ export class PhaseActionsComponent {
     if ((section === 'verify' || section === 'modernize') && migration?.decision === 'rejected') {
       return g('blocked', 'Rechazaste este intento',
         'El candidato se descartó y el código original sigue intacto (rollback). Puedes pedir otra iteración de la misma wave o volver a Plan para cambiarla.',
-        {primary: {kind:'retryMigration', label:'Solicitar otra iteración', icon:'restart_alt'}});
+        {primary: {kind:'retryMigration', label: vm.migrationBusy ? 'Encolando…' : 'Solicitar otra iteración', icon:'restart_alt', disabled: vm.migrationBusy}});
     }
     if (section === 'modernize' && migration?.status === 'failed') {
       return g('blocked', 'Modernize no se completó', migration.error || 'El worker devolvió un error.',
-        {primary: {kind:'retryMigration', label:'Solicitar otra iteración', icon:'restart_alt'}});
+        {primary: {kind:'retryMigration', label: vm.migrationBusy ? 'Encolando…' : 'Solicitar otra iteración', icon:'restart_alt', disabled: vm.migrationBusy}});
     }
     if (status === 'failed') {
       return g('blocked', `${step.label} falló`, run?.error || 'La ejecución terminó con un error.',
@@ -99,12 +99,12 @@ export class PhaseActionsComponent {
         'Edita el Blueprint y guarda una nueva revisión, o vuelve a ejecutar Plan para generar otra propuesta.', {rerun: true});
       if (p.plan_approved !== 1) return g('action', 'Aprueba el Blueprint',
         'Revisa las waves propuestas abajo. Al aprobar, podrás elegir qué wave ejecutar.',
-        {primary: {kind:'approvePlan', label:'Aprobar Blueprint', icon:'check'}, rerun: true});
+        {primary: {kind:'approvePlan', label: vm.planBusy ? 'Aprobando…' : 'Aprobar Blueprint', icon:'check', disabled: vm.planBusy}, rerun: true});
       if (!p.active_wave_id) {
         const pending = executable.find(w => vm.blueprint!.wave_approvals[w.id] !== 'rejected') || executable[0];
         return g('action', 'Aprueba la wave que quieres ejecutar',
           `${pending.id}: ${pending.goal}. Solo se modifica una wave por vez.`,
-          {primary: {kind:'approveWave', label:`Aprobar ${pending.id}`, icon:'check', arg: pending.id}});
+          {primary: {kind:'approveWave', label: vm.planBusy ? 'Aprobando…' : `Aprobar ${pending.id}`, icon:'check', arg: pending.id, disabled: vm.planBusy}});
       }
     }
 
@@ -143,7 +143,7 @@ export class PhaseActionsComponent {
     };
     return g('action', `Ejecuta ${step.label}`, vm.stageRunnable || vm.isAnyRunning ? hints[section] || step.description
       : 'Este paso aún no está disponible para el snapshot activo.',
-      {primary: {kind:'run', label:`Ejecutar ${step.label}`, icon:'play_arrow', disabled: !vm.stageRunnable || vm.busy || vm.ingestRunning}});
+      {primary: {kind:'run', label: vm.busy ? 'Iniciando…' : `Ejecutar ${step.label}`, icon:'play_arrow', disabled: !vm.stageRunnable || vm.busy || vm.ingestRunning}});
   }
 
   act(action: StepAction): void {

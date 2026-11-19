@@ -41,10 +41,10 @@
           </select>
           <button llButton variant="secondary" size="sm" type="button" (click)="vm.importRepository()" [disabled]="!vm.selectedRepo || vm.uploading || vm.ingestRunning">Importar</button>
         </div>
-        <button type="button" class="text-action danger-link" (click)="vm.disconnectGithub()">Desconectar GitHub</button>
+        <button type="button" class="text-action danger-link" [disabled]="vm.githubBusy" (click)="vm.disconnectGithub()">{{vm.githubBusy?'Desconectando…':'Desconectar GitHub'}}</button>
       </ng-container>
       <ng-template #githubDisconnected><p>Autoriza tu cuenta para importar repositorios públicos o privados.</p>
-        <div class="alt-actions"><button llButton variant="secondary" size="sm" type="button" (click)="vm.connectGithub()"><ll-icon name="link" size="sm"/> Conectar GitHub</button></div></ng-template>
+        <div class="alt-actions"><button llButton variant="secondary" size="sm" type="button" [disabled]="vm.githubBusy" (click)="vm.connectGithub()"><ll-icon name="link" size="sm"/> {{vm.githubBusy?'Conectando…':'Conectar GitHub'}}</button></div></ng-template>
     </div>
   </div>
 
@@ -58,8 +58,8 @@
       <div *ngIf="j.status==='running' || j.status==='queued'" class="ll-progress" role="progressbar" [attr.aria-label]="'Progreso de '+j.kind" [attr.aria-valuenow]="j.progress" aria-valuemin="0" aria-valuemax="100"><span [style.width.%]="j.progress"></span></div>
       <p *ngIf="j.error" class="inline-error">{{j.error}}</p>
       <div class="job-actions" *ngIf="j.status==='failed'||j.status==='canceled'||j.status==='queued'">
-        <button *ngIf="j.status==='failed'||j.status==='canceled'" llButton variant="secondary" size="sm" type="button" (click)="vm.retryJob(j.id)"><ll-icon name="refresh" size="sm"/> Reintentar</button>
-        <button *ngIf="j.status==='queued'" llButton variant="ghost" size="sm" type="button" (click)="vm.cancelJob(j.id)">Cancelar</button></div>
+        <button *ngIf="j.status==='failed'||j.status==='canceled'" llButton variant="secondary" size="sm" type="button" [disabled]="vm.pendingJobId===j.id" (click)="vm.retryJob(j.id)"><ll-icon name="refresh" size="sm"/> {{vm.pendingJobId===j.id?'Reintentando…':'Reintentar'}}</button>
+        <button *ngIf="j.status==='queued'" llButton variant="ghost" size="sm" type="button" [disabled]="vm.pendingJobId===j.id" (click)="vm.cancelJob(j.id)">{{vm.pendingJobId===j.id?'Cancelando…':'Cancelar'}}</button></div>
     </article>
   </section>
 
