@@ -1,0 +1,12 @@
+{
+  "fases_completas": 7.0,
+  "reglas": 1.0,
+  "defectos": 0.815,
+  "citas": 0.663,
+  "espanol": 0.905,
+  "original_intacto": 1.0,
+  "modernize_cambio": 0.667,
+  "modernize_pruebas_ok": 1.0,
+  "verify_honesto": 1.0,
+  "proyectos": 3
+}

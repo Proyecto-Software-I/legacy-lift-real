@@ -1,0 +1,64 @@
+{
+  "resumen": {
+    "fases_completas": 7.0,
+    "reglas": 1.0,
+    "defectos": 0.815,
+    "citas": 0.663,
+    "espanol": 0.905,
+    "original_intacto": 1.0,
+    "modernize_cambio": 0.667,
+    "modernize_pruebas_ok": 1.0,
+    "verify_honesto": 1.0,
+    "proyectos": 3
+  },
+  "proyectos": [
+    {
+      "id": "test-000-python-biblioteca",
+      "lenguaje": "python",
+      "tamano": "chico",
+      "fases_completas": 7,
+      "reglas": 1.0,
+      "defectos": 1.0,
+      "citas_total": 0,
+      "citas_validas": 0,
+      "citas": 0.0,
+      "espanol": 0.8571428571428571,
+      "original_intacto": true,
+      "modernize_cambio": true,
+      "modernize_pruebas_ok": true,
+      "verify_honesto": true
+    },
+    {
+      "id": "test-001-javascript-biblioteca",
+      "lenguaje": "javascript",
+      "tamano": "chico",
+      "fases_completas": 7,
+      "reglas": 1.0,
+      "defectos": 1.0,
+      "citas_total": 101,
+      "citas_validas": 101,
+      "citas": 1.0,
+      "espanol": 1.0,
+      "original_intacto": true,
+      "modernize_cambio": true,
+      "modernize_pruebas_ok": true,
+      "verify_honesto": true
+    },
+    {
+      "id": "test-009-javascript-envios",
+      "lenguaje": "javascript",
+      "tamano": "grande",
+      "fases_completas": 7,
+      "reglas": 1.0,
+      "defectos": 0.4444444444444444,
+      "citas_total": 101,
+      "citas_validas": 100,
+      "citas": 0.9900990099009901,
+      "espanol": 0.8571428571428571,
+      "original_intacto": true,
+      "modernize_cambio": false,
+      "modernize_pruebas_ok": true,
+      "verify_honesto": true
+    }
+  ]
+}

@@ -1,0 +1,5 @@
+fecha: 2026-11-15T21:20:27-04:00
+equipo: Apple M5, 16 GB
+modelo_base: Qwen3-4B-Instruct-2507-MLX-4bit
+mlx_lm: 0.32.2
+datos_sha256: d4148afa1a743d72ecc2bf5c212618e7fbb5b6c4064c5015b5e4bb32172cfe4c

@@ -1,0 +1,47 @@
+# Publicación de la terminal de LegacyLift en GitHub Releases.
+# Se ejecuta desde .github/workflows/terminal-release.yml al crear una etiqueta v* (por ejemplo v0.1.0).
+version: 2
+project_name: legacylift
+
+before:
+  hooks:
+    - go mod tidy
+
+builds:
+  - binary: legacylift
+    env:
+      - CGO_ENABLED=0
+    goos: [linux, darwin, windows]
+    goarch: [amd64, arm64]
+    ignore:
+      - goos: windows
+        goarch: arm64
+    ldflags:
+      - -s -w -X github.com/charmbracelet/crush/internal/version.Version={{.Version}}
+    flags:
+      - -trimpath
+
+archives:
+  - name_template: "legacylift_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+    files:
+      - README.md
+      - LICENSE.md
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+release:
+  github:
+    owner: Proyecto-Software-I
+    name: legacy-lift-real
+  name_template: "LegacyLift Terminal {{ .Version }}"
+  footer: |
+    Instalación: descarga el archivo de tu sistema, descomprímelo y ejecuta `legacylift` dentro de la carpeta del proyecto legado.
+    Guía completa: terminal/README.md

@@ -1,0 +1,10 @@
+test-000-python-biblioteca ok 412s
+test-001-javascript-biblioteca ok 478s
+test-002-java-biblioteca ok 627s
+test-003-go-biblioteca ok 637s
+test-004-python-biblioteca ok 663s
+test-005-javascript-biblioteca ok 676s
+test-006-java-biblioteca error 593s
+test-007-go-biblioteca ok 689s
+test-008-python-biblioteca ok 1142s
+test-009-javascript-envios ok 855s

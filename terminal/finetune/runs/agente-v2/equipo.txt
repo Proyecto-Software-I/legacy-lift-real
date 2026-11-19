@@ -1,0 +1,4 @@
+fecha: 2026-11-16T14:50:19-04:00
+equipo: Apple M5, 16 GB
+cambios: bloqueo de escritura, ejemplos de recuperacion, Modernize x3
+datos_sha256: ce158445b8b446b9b39f68da95c5137e3ae84c922cede092e469e28d0fe580e0

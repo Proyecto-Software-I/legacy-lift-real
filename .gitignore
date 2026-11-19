@@ -11,3 +11,6 @@ backend/data/
 
 # Copias sincronizadas de los recursos oficiales; fuente: Proyecto-Software-I/frontend
 frontend/public/branding/official/
+terminal/finetune/runs/*/adapters/
+terminal/finetune/runs/*/fused/
+terminal/finetune/runs/*/examen/trabajo-*/
