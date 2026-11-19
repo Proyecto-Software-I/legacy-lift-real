@@ -78,6 +78,9 @@ export class WorkspaceFacade {
   private readonly _busy = signal<boolean>(false);
   get busy(): boolean { return this._busy(); }
   set busy(value: boolean) { this._busy.set(value); }
+  private readonly _loadingProject = signal<boolean>(false);
+  get loadingProject(): boolean { return this._loadingProject(); }
+  set loadingProject(value: boolean) { this._loadingProject.set(value); }
   private readonly _error = signal<string>('');
   get error(): string { return this._error(); }
   set error(value: string) { this._error.set(value); }
@@ -284,7 +287,7 @@ export class WorkspaceFacade {
     this.reviews=[];this.reviewDraft={};this.understandData=null;this.assessmentData=null;this.assessmentProgress=null;this.blueprint=null;this.blueprintDraft=null;this.packs=null;this.baselinePreflight=null;this.migrationAttempts=[];this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.migrationRiskReason='';this.migrationWorkerSeen=null;this.workspaceSection='source';
     this.artifactContent='';this.artifactName='';this.rendered='';this.showCreate=false;this.showEdit=false;this.showHelp=false;
     this.createName='';this.createSystem='';this.projectQuery='';this.stageId='discover';
-    this.error='';this.notice='';this.busy=false;this.uploading=false;this.analysisBusy=false;
+    this.error='';this.notice='';this.busy=false;this.loadingProject=false;this.uploading=false;this.analysisBusy=false;
     this.sessionCheckFailed=false;
   }
 
@@ -569,14 +572,15 @@ export class WorkspaceFacade {
     const requestId = ++this.selectedRequestId;
     this.eventsAbort?.abort();this.lastEventId=0;this.ingestJobs=[];
     this.discoverData=null;this.scanProgress=null;this.sourceFiles=[];this.reviews=[];this.understandData=null;this.assessmentData=null;this.assessmentProgress=null;this.selectedFilePaths=new Set();
-    this.selected = undefined; this.artifactContent=''; this.artifactName=''; this.stageId='discover';this.workspaceSection='source';
+    this.selected = undefined; this.loadingProject = true; this.artifactContent=''; this.artifactName=''; this.stageId='discover';this.workspaceSection='source';
     this.api.project(pid).subscribe({next:p=>{
       if(this.session.token!==token || requestId!==this.selectedRequestId) return;
+      this.loadingProject = false;
       this.selected=p; this.pickFirstArtifact(); this.loadSnapshots(pid);this.loadJobs(pid);this.loadDiscover(pid);this.loadAnalysisControls(pid);this.loadReviews(pid);this.loadUnderstand(pid);this.loadAssessment(pid);this.loadBlueprint(pid);this.loadBaselinePreflight(pid);this.loadMigration(pid,true);this.connectEvents(pid);
       const currentStep = WorkspaceFacade.STEP_ORDER.find(s => !this.isStepGateComplete(s)) || 'verify';
       this.workspaceSection = currentStep;
       if (STAGES.some(x => x.id === currentStep)) this.stageId = currentStep;
-    },error:e=>{if(this.session.token===token)this.showError(e);}});
+    },error:e=>{if(this.session.token===token && requestId===this.selectedRequestId){this.loadingProject=false;this.showError(e);}}});
   }
   refreshSelected(silent=false): void {
     if (!this.selected) return;
@@ -648,30 +652,41 @@ export class WorkspaceFacade {
       });
       if (!response.ok || !response.body) return; // Polling remains as fallback.
       const reader=response.body.getReader();const decoder=new TextDecoder();let buffer='';
+      let initialChunk=true;
       while(!controller.signal.aborted) {
         const {value,done}=await reader.read();if(done) break;
         buffer+=decoder.decode(value,{stream:true}).replace(/\r\n/g,'\n');
         const frames=buffer.split('\n\n');buffer=frames.pop() || '';
+        let sawUpdate=false; let sawDiscover=false; let sawAssess=false; let sawBaseline=false; let sawBlueprint=false; let sawMigration=false;
         for(const frame of frames) {
           const id=frame.match(/^id: (\d+)/m);
           if(id) this.lastEventId=Math.max(this.lastEventId,Number(id[1]));
           if(frame.includes('event: update') && this.selected?.id===pid) {
+            sawUpdate=true;
             const match=frame.match(/^data: (.+)$/m);
             if (match) {
               try {
                 const evt=JSON.parse(match[1]);
                 if(evt.kind==='analysis-progress') this.scanProgress=evt.payload as ScanProgress;
-                if(evt.kind==='analysis' && evt.payload?.phase==='discover') this.loadDiscover(pid);
-                if(evt.kind==='analysis' && evt.payload?.phase==='assess') this.loadAssessment(pid);
-                if(evt.kind==='wave'||evt.kind==='baseline')this.loadBaselinePreflight(pid);
-                if(evt.kind==='blueprint') this.loadBlueprint(pid);
-                if(evt.kind==='migration'||evt.kind==='verify'||evt.kind==='migration-review')this.loadMigration(pid);
+                if(evt.kind==='analysis' && evt.payload?.phase==='discover') sawDiscover=true;
+                if(evt.kind==='analysis' && evt.payload?.phase==='assess') sawAssess=true;
+                if(evt.kind==='wave'||evt.kind==='baseline') sawBaseline=true;
+                if(evt.kind==='blueprint') sawBlueprint=true;
+                if(evt.kind==='migration'||evt.kind==='verify'||evt.kind==='migration-review') sawMigration=true;
                 if(evt.kind==='analysis-stage') this.assessmentProgress=evt.payload;
               } catch { /* Ignore malformed event; polling is the fallback. */ }
             }
-            this.refreshSelected(true);this.loadJobs(pid);
           }
         }
+        if (sawUpdate && !initialChunk && this.selected?.id===pid) {
+          if(sawDiscover) this.loadDiscover(pid);
+          if(sawAssess) this.loadAssessment(pid);
+          if(sawBaseline) this.loadBaselinePreflight(pid);
+          if(sawBlueprint) this.loadBlueprint(pid);
+          if(sawMigration) this.loadMigration(pid);
+          this.refreshSelected(true);this.loadJobs(pid);
+        }
+        initialChunk=false;
       }
     } catch(e) { if(!controller.signal.aborted) { /* polling fallback */ } }
   }

@@ -2,6 +2,11 @@
 .page-content { max-width: var(--page-width); margin: 0 auto; padding: 28px clamp(16px,3vw,40px) 64px; }
 .page-error { margin-bottom: 16px; }
 .retry-connection { margin-bottom: 16px; }
+.loading-project { padding: 72px 24px; text-align: center; display: grid; justify-items: center; gap: 10px; }
+.loading-project h2, .loading-project p { margin: 0; }
+.loading-project p { color: var(--color-muted); font-size: 14px; }
+.loading-project .spin { animation: ll-spin 900ms linear infinite; color: var(--color-accent); }
+@keyframes ll-spin { to { transform: rotate(360deg); } }
 
 /* Project header: identity only. Progress lives in the route, actions in the step card. */
 .project-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 24px; }

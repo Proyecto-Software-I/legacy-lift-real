@@ -2,7 +2,7 @@
   <ll-notice *ngIf="vm.error" tone="error" [message]="vm.error" (dismissed)="vm.dismiss()" class="page-error"/>
   <button *ngIf="vm.sessionCheckFailed" llButton variant="secondary" type="button" class="retry-connection" (click)="vm.bootstrap()"><ll-icon name="refresh" size="sm"/> Reintentar conexión</button>
 
-  <ng-container *ngIf="vm.selected as p; else emptyState">
+  <ng-container *ngIf="vm.selected as p; else noProjectView">
     <header class="project-header">
       <div class="project-title">
         <h1>{{p.name}}</h1>
@@ -86,6 +86,13 @@
     </div>
   </ng-container>
 
+  <ng-template #noProjectView>
+    <section class="loading-project" *ngIf="vm.loadingProject; else emptyState" role="status" aria-live="polite">
+      <ll-icon name="progress_activity" size="lg" class="spin"/>
+      <h2>Cargando proyecto…</h2>
+      <p>Obteniendo estado, archivos y resultados del servidor.</p>
+    </section>
+  </ng-template>
   <ng-template #emptyState>
     <section class="welcome">
       <h1>Empieza por un proyecto</h1>
