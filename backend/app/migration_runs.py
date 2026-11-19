@@ -9,7 +9,7 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from . import db, planning, migration_packs, pipeline, workspace
+from . import ai, db, planning, migration_packs, pipeline, workspace
 
 
 def _limit() -> int:
@@ -56,7 +56,7 @@ def _scope(pid: str) -> tuple[dict,dict,dict,dict]:
         raise ValueError('Primero aprueba un Blueprint y una wave ejecutable')
     pack=migration_packs.selected_pack(pid,wave)
     if not pack or pack['status']!='available':raise ValueError('Migration Pack incompatible')
-    if project['provider'] in ('claude','codex') and not db.consent_is_active(pid,project['active_snapshot_id'],project['provider']):
+    if project['provider'] in ai.AI_PROVIDERS and not db.consent_is_active(pid,project['active_snapshot_id'],project['provider']):
         raise ValueError('No se autorizó enviar código al proveedor de IA')
     baseline_run=db.last_run(pid,'baseline')
     if not baseline_run or baseline_run['status']!='completed':raise ValueError('Captura primero el Behavioral Baseline')
@@ -83,8 +83,9 @@ def enqueue(pid: str, user_id: str, parent: str | None=None) -> dict:
         if conn.execute("SELECT 1 FROM migration_attempts WHERE project_id=? AND snapshot_id=? AND blueprint_id=? AND wave_id=? AND decision='approved'",(pid,project['active_snapshot_id'],plan['id'],wave['id'])).fetchone():
             raise ValueError('Esta wave ya tiene un candidato aprobado')
         aid=str(uuid.uuid4());rid=str(uuid.uuid4())
-        conn.execute("INSERT INTO phase_runs(id,project_id,phase,status,started_at,provider,prompt_hash) VALUES(?,?,?,?,?,?,?)",
-                     (rid,pid,'modernize','running',db.now(),project['provider'],pipeline.prompt_for('modernize',pid)[1]))
+        conn.execute("INSERT INTO phase_runs(id,project_id,phase,status,started_at,provider,prompt_hash,snapshot_id,model) VALUES(?,?,?,?,?,?,?,?,?)",
+                     (rid,pid,'modernize','running',db.now(),project['provider'],pipeline.prompt_for('modernize',pid)[1],
+                      project['active_snapshot_id'],pipeline.model_for_phase('modernize',project['provider'])))
         conn.execute("""INSERT INTO migration_attempts(id,project_id,phase_run_id,snapshot_id,source_hash,blueprint_id,blueprint_revision,wave_id,pack_id,provider,parent_attempt_id,status,created_at)
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",(aid,pid,rid,project['active_snapshot_id'],project['snapshot_hash'],plan['id'],plan['revision'],wave['id'],pack['id'],project['provider'],parent,'queued',db.now()))
     db.invalidate_stages(pid,('verify',))
@@ -166,11 +167,13 @@ def heartbeat() -> None:
 
 def recover_interrupted() -> None:
     """Called only by a worker holding the exclusive worker lock."""
+    verify_in_host = os.getenv('LEGACYLIFT_VERIFY_IN_HOST', 'false').lower() == 'true'
     with db.connect() as conn:
         aborted=conn.execute("SELECT id,project_id,phase_run_id FROM migration_attempts WHERE status='running'").fetchall()
-        verifications=conn.execute("SELECT id,project_id,verify_run_id FROM migration_attempts WHERE verify_status='running'").fetchall()
+        verifications=[] if verify_in_host else conn.execute("SELECT id,project_id,verify_run_id FROM migration_attempts WHERE verify_status='running'").fetchall()
         conn.execute("UPDATE migration_attempts SET status='failed',finished_at=?,error='Worker anterior interrumpido; reintento manual necesario' WHERE status='running'",(db.now(),))
-        conn.execute("UPDATE migration_attempts SET verify_status='failed',verification_json=NULL WHERE verify_status='running'")
+        if not verify_in_host:
+            conn.execute("UPDATE migration_attempts SET verify_status='failed',verification_json=NULL WHERE verify_status='running'")
     for row in aborted:
         db.run_fail(row['phase_run_id'],'Worker anterior interrumpido; reintento manual necesario')
     for row in verifications:

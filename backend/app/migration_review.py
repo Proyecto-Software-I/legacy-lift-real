@@ -35,15 +35,17 @@ def _changed(pid:str,aid:str) -> list[str]:
     # Use that recorded list instead of reading all 5000 source files on every UI request.
     item=migration_runs.get(pid,aid)
     names=item['result'].get('modified_files') if item else None
-    if not isinstance(names,list) or not names or len(names)>5:
+    # Refactor packs touch at most 5 existing files; language migration may add a few more classes.
+    if not isinstance(names,list) or not names or len(names)>14:
         raise ValueError('El intento no conserva el listado validado de archivos modificados')
     changed=[]
     for name in sorted(names):
         if not isinstance(name,str) or name.startswith('/') or '..' in Path(name).parts:
             raise ValueError('Ruta de cambio inválida')
-        if not (original/name).is_file() or not (candidate/name).is_file():
-            raise ValueError('El archivo original o candidato desapareció')
-        if (original/name).read_bytes()!=(candidate/name).read_bytes():changed.append(name)
+        if not (candidate/name).is_file():
+            raise ValueError('El archivo candidato desapareció')
+        # A file absent from the original snapshot is a NEW file (language migration).
+        if not (original/name).exists() or (original/name).read_bytes()!=(candidate/name).read_bytes():changed.append(name)
     return changed
 
 
@@ -59,13 +61,15 @@ def summary(pid: str, aid: str) -> dict:
     old=workspace.project_source(pid);new=migration_runs.candidate_path(pid,aid)
     rows=[];added=removed=0
     for name in _changed(pid,aid):
-        before=(old/name).read_text(encoding='utf-8',errors='replace').splitlines()
+        is_new=not (old/name).exists()
+        before=[] if is_new else (old/name).read_text(encoding='utf-8',errors='replace').splitlines()
         after=(new/name).read_text(encoding='utf-8',errors='replace').splitlines()
         ops=difflib.SequenceMatcher(a=before,b=after,autojunk=False).get_opcodes()
         plus=sum(j2-j1 for tag,i1,i2,j1,j2 in ops if tag in ('insert','replace'))
         minus=sum(i2-i1 for tag,i1,i2,j1,j2 in ops if tag in ('delete','replace'))
         added+=plus;removed+=minus
-        note=('Se agregaron líneas' if plus and not minus else
+        note=('Archivo nuevo generado por la migración' if is_new else
+              'Se agregaron líneas' if plus and not minus else
               'Se eliminaron líneas' if minus and not plus else
               'Se modificó la implementación existente')
         rows.append({'path':name,'added':plus,'removed':minus,'summary':note,
@@ -80,7 +84,8 @@ def diff_file(pid: str, aid: str, name: str) -> str:
     _attempt(pid,aid)
     if name not in _changed(pid,aid):raise ValueError('Archivo no incluido en el intento')
     src=workspace.project_source(pid)/name;dst=migration_runs.candidate_path(pid,aid)/name
-    return ''.join(difflib.unified_diff(src.read_text(encoding='utf-8',errors='replace').splitlines(keepends=True),
+    before=src.read_text(encoding='utf-8',errors='replace').splitlines(keepends=True) if src.exists() else []
+    return ''.join(difflib.unified_diff(before,
                   dst.read_text(encoding='utf-8',errors='replace').splitlines(keepends=True),
                   fromfile='antes/'+name,tofile='después/'+name,n=3))[:250000]
 
@@ -122,6 +127,7 @@ def assemble(pid: str, aid: str) -> tuple[Path,str]:
             if entry['selected']:
                 rel=entry['path'];target=temp/rel
                 if target.is_symlink() or (source/rel).is_symlink():raise ValueError('Ruta simbólica prohibida')
+                target.parent.mkdir(parents=True,exist_ok=True)
                 shutil.copyfile(source/rel,target)
         digest=workspace.snapshot_hash(temp)
         if result.exists():

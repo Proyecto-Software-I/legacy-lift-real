@@ -1,0 +1,13 @@
+# Reverse proxy TLS sobre IPv6 para exponer FastAPI hacia el frontend en Firebase Hosting.
+# Reemplaza api.tu-dominio.com por tu dominio con registro AAAA apuntando a tu PC/VM.
+{
+    admin off
+}
+
+classforge-ai.dynv6.net {
+    encode zstd gzip
+    reverse_proxy 127.0.0.1:8000 {
+        # Evita buffering en SSE (/api/projects/{pid}/events)
+        flush_interval -1
+    }
+}

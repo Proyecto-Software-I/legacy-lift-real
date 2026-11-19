@@ -1,17 +1,16 @@
 /* Encapsulated styling for stage-card. */
-.ll-stage { width: 100%; display: flex; align-items: center; gap: 13px; min-height: 63px; padding: 11px 12px; background: transparent; border: 1px solid transparent; border-radius: var(--radius-sm); text-align: left; color: var(--color-text-secondary); transition: background var(--transition-fast), border-color var(--transition-fast); }
-.ll-stage:hover { background: var(--color-shade); border-color: var(--color-border); }
-.ll-stage.is-active { background: var(--color-accent-surface); border-color: var(--color-accent-border); color: var(--color-text); }
+.ll-stage { width: 100%; display: flex; align-items: center; gap: 13px; min-height: 64px; padding: 11px 14px; background: var(--color-panel-subtle); border: 1px solid var(--color-border); border-radius: var(--radius-md); text-align: left; color: var(--color-text-secondary); transition: background var(--transition-fast), border-color var(--transition-fast), transform var(--transition-fast); margin-bottom: 8px; }
+.ll-stage:hover { background: var(--color-hover); border-color: var(--color-border-strong); transform: translateY(-1px); }
+.ll-stage.is-complete { background: color-mix(in srgb, var(--color-success-surface) 38%, var(--color-panel-subtle)); border-color: var(--color-success-border); color: var(--color-text); }
+.ll-stage.is-active { color: var(--color-text); background: var(--color-accent-surface); border-color: var(--color-accent); box-shadow: 0 0 0 1px var(--color-accent); }
+.ll-stage.is-active.is-complete { border-color: var(--color-success); box-shadow: 0 0 0 1px var(--color-success); }
 .ll-stage-index { flex: none; width: 35px; height: 35px; display: grid; place-items: center; border-radius: 10px; color: var(--color-text-secondary); background: var(--color-shade-soft); border: 1px solid var(--color-border); font: 650 11px 'JetBrains Mono',monospace; }
-.ll-stage.is-active .ll-stage-index, .ll-stage.is-complete .ll-stage-index { color: var(--color-accent); border-color: var(--color-accent-border); background: var(--color-accent-surface); }
+.ll-stage.is-active .ll-stage-index { color: var(--color-accent); background: var(--color-surface-raised); border-color: var(--color-accent-border); }
+.ll-stage.is-complete .ll-stage-index { color: var(--color-success); background: var(--color-success-surface); border-color: var(--color-success-border); }
 .ll-stage-info { display: grid; gap: 2px; min-width: 0; flex: 1; }
-.ll-stage-info strong { font-size: 13px; line-height: 1.2; }
+.ll-stage-info strong { font-size: 13px; line-height: 1.2; color: var(--color-text); }
 .ll-stage-info small { font-size: 11px; color: var(--color-muted); }
 .ll-stage>ll-icon:last-child { color: var(--color-muted); }
-.ll-stage:hover { background: var(--color-hover); border-color: var(--color-border); }
-.ll-stage.is-active { color: var(--color-text); background: var(--color-accent-surface); border-color: var(--color-accent-border); }
-.ll-stage-index { background: var(--color-shade-soft); border-color: var(--color-border); }
-.ll-stage.is-active .ll-stage-index { color: var(--color-accent); background: var(--color-surface-raised); border-color: var(--color-accent-border); }
 
 @media (max-width:630px) {
   .ll-stage { gap:8px; }

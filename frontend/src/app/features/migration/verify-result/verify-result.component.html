@@ -1,42 +1,114 @@
-<section class="panel verify-panel" aria-label="Verificar y decidir modernización">
- <span class="eyebrow">SPRINT 4 · VERIFY</span><h2>Comprobar antes de aprobar</h2>
- <p class="muted">Comparamos las pruebas y verificaciones del código original con los archivos que decidiste conservar.</p>
- <div *ngIf="!vm.latestMigration" class="info">Todavía no hay intentos de Modernize. Ejecuta primero una wave aprobada.</div>
+<section class="verify-panel" aria-label="Verificar y decidir">
+ <p *ngIf="!vm.latestMigration" class="panel info">Todavía no hay un candidato. Ejecuta Modernize con la wave aprobada.</p>
  <ng-container *ngIf="vm.latestMigration as attempt">
-  <div *ngIf="attempt.status!=='completed'" class="info">Esperando a que termine Modernize.</div>
+  <p *ngIf="attempt.status!=='completed'" class="panel info">Verify estará disponible cuando Modernize termine de generar el candidato.</p>
   <ng-container *ngIf="attempt.status==='completed'">
-    <div class="info" *ngIf="!attempt.verification">
-      <strong>Verificación pendiente.</strong>
-      <p>Selecciona los archivos en Modernize y ejecuta Verify desde el panel lateral.</p>
-    </div>
+    <p class="panel info" *ngIf="!attempt.verification">Revisa los archivos en Modernize y ejecuta Verify para comparar el original con el candidato.</p>
+
     <ng-container *ngIf="attempt.verification as v">
-      <div class="result"><span class="eyebrow">RESULTADO DE VERIFY</span>
-        <h3>{{v.classification==='verified_within_tests'?'Verificado dentro de las pruebas':v.classification==='partial'?'Evidencia parcial':v.classification==='divergent'?'Hay divergencias':'Equivalencia no demostrada'}}</h3>
-        <p>{{v.reason}}</p></div>
-      <div class="checks"><div><span>Comprobaciones originales</span><strong>{{v.static_before.total-v.static_before.failed}} / {{v.static_before.total}}</strong></div>
-        <div><span>Comprobaciones de candidato</span><strong>{{v.static_after.total-v.static_after.failed}} / {{v.static_after.total}}</strong></div>
-        <div><span>Archivos seleccionados</span><strong>{{v.files_selected}}</strong></div></div>
-      <p class="muted">{{v.limits}}</p>
-      <div *ngIf="!attempt.decision" class="decision">
-        <h3>Decisión humana</h3>
-        <label *ngIf="v.classification!=='verified_within_tests' && v.classification!=='divergent'" class="reason-label">
-          Motivo para aceptar una modernización sin equivalencia demostrada
-          <textarea rows="3" [value]="vm.migrationRiskReason" (input)="vm.migrationRiskReason=$any($event.target).value"
-            placeholder="Describe qué pruebas faltan y por qué aceptas el riesgo..."></textarea>
-          <small>Mínimo 20 caracteres para aprobar con evidencia parcial o insuficiente.</small>
+      <!-- 1. The verdict, in plain words -->
+      <article class="panel result" [attr.data-class]="v.classification" [class.pending]="!attempt.decision && v.classification!=='divergent'">
+        <div class="result-top">
+          <ll-status-badge [status]="v.classification"/>
+          <span class="outcome">{{outcomeLabel(v)}}</span>
+        </div>
+        <h3>{{v.evidence_kind==='dual_run' && v.classification==='verified_within_tests' ? 'El Java produce exactamente la misma salida que el COBOL' : verdict(v.classification)}}</h3>
+        <p>{{v.reason}}</p>
+        <div class="score" *ngIf="v.confidence_score!=null">
+          <div class="score-head"><span>Migration Confidence Score</span><strong>{{v.confidence_score}}<small>/100</small></strong></div>
+          <div class="score-bar" role="img" [attr.aria-label]="'Puntuación orientativa '+v.confidence_score+' de 100'"><span [style.width.%]="v.confidence_score"></span></div>
+          <ul class="factors">
+            <li *ngFor="let f of v.confidence_factors"><span class="factor-label">{{f.label}}</span><span class="factor-points">{{f.points}}/{{f.max}}</span><small>{{f.detail}}</small></li>
+          </ul>
+          <p class="score-note">Orientativo: resume la evidencia ejecutada y no demuestra equivalencia. {{v.coverage?.method}}</p>
+        </div>
+        <dl class="checks">
+          <div><dt>Comprobaciones del original</dt><dd>{{v.static_before.total-v.static_before.failed}} de {{v.static_before.total}} correctas</dd></div>
+          <div><dt>Comprobaciones del candidato</dt><dd>{{v.static_after.total-v.static_after.failed}} de {{v.static_after.total}} correctas</dd></div>
+          <div><dt>Archivos verificados</dt><dd>{{v.files_selected}}</dd></div>
+        </dl>
+      </article>
+
+      <section class="panel dual" *ngIf="v.evidence_kind==='dual_run' && v.dual_run?.comparison?.length" aria-labelledby="dual-title">
+        <h3 id="dual-title">Dual run: COBOL original frente a Java</h3>
+        <p class="muted">Ambos programas se ejecutaron en <code>{{v.dual_run?.image}}</code> sin red y con el código en solo lectura.</p>
+        <div class="dual-row" *ngFor="let row of v.dual_run!.comparison">
+          <div class="dual-head"><strong class="mono">{{row.program}}</strong>
+            <ll-status-badge [status]="row.equal ? 'passed' : 'divergent'" [label]="row.equal ? 'Salida idéntica' : 'Salida distinta'"/></div>
+          <div class="dual-grid">
+            <div><span class="sub-label">COBOL (GnuCOBOL)</span><pre class="verify-log">{{row.cobol || '(sin salida)'}}</pre></div>
+            <div><span class="sub-label">Java 17</span><pre class="verify-log">{{row.java || '(sin salida)'}}</pre></div>
+          </div>
+        </div>
+        <p class="inline-error" *ngIf="v.hardcoded_lines?.length">La salida esperada aparece escrita literalmente en el Java; por eso no cuenta como evidencia.</p>
+      </section>
+
+      <!-- 2. The decision, when one is needed -->
+      <section id="verify-decision" *ngIf="!attempt.decision" class="panel decision" [class.blocked]="v.classification==='divergent'" aria-labelledby="decision-title">
+        <h3 id="decision-title">{{v.classification==='divergent' ? 'No se puede aprobar este intento' : 'Tu decisión'}}</h3>
+        <p class="muted" *ngIf="v.classification==='divergent'">Las pruebas no coinciden antes y después del cambio. Rechaza este intento o solicita otra iteración en Modernize.</p>
+        <p class="muted" *ngIf="v.classification==='verified_within_tests'">Las pruebas pasaron, pero la decisión final es tuya: al aprobar se habilitan las descargas del código modernizado. Si rechazas, el original sigue intacto.</p>
+        <label *ngIf="v.classification!=='divergent' && v.classification!=='verified_within_tests'" class="reason-label" for="risk-reason">
+          <span>Motivo para aceptar sin equivalencia demostrada</span>
+          <textarea id="risk-reason" class="input" rows="3" [value]="vm.migrationRiskReason" (input)="vm.migrationRiskReason=$any($event.target).value"
+            aria-describedby="risk-reason-help" placeholder="Qué pruebas faltan y por qué aceptas el riesgo"></textarea>
+          <small id="risk-reason-help" [class.ok]="vm.migrationRiskReason.trim().length>=20">
+            {{vm.migrationRiskReason.trim().length>=20 ? 'Motivo suficiente.' : 'Escribe al menos 20 caracteres ('+vm.migrationRiskReason.trim().length+' de 20).'}}</small>
         </label>
-        <div class="actions"><button llButton variant="primary" type="button" (click)="vm.migrationDecision(true)"
-            [disabled]="v.classification==='divergent' || (v.classification!=='verified_within_tests' && vm.migrationRiskReason.trim().length<20)">
-            <ll-icon name="check_circle"/> Aprobar versión revisada</button>
-          <button llButton variant="danger" type="button" (click)="vm.migrationDecision(false)"><ll-icon name="cancel"/> Rechazar intento</button></div>
-        <p class="muted" *ngIf="v.classification==='divergent'">No se puede aprobar con divergencias. Puedes solicitar otra iteración en Modernize.</p>
-      </div>
-      <div *ngIf="attempt.decision==='approved'" class="decision"><h3>Versión aprobada · entregables</h3>
-        <p class="muted">La fuente original se conserva y las descargas salen de la versión revisada.</p>
-        <div class="actions"><button llButton variant="primary" type="button" (click)="vm.downloadMigration('zip')"><ll-icon name="archive"/> ZIP completo</button>
-          <button llButton variant="secondary" type="button" (click)="vm.downloadMigration('patch')"><ll-icon name="code"/> Parche .patch</button>
-          <button llButton variant="secondary" type="button" (click)="vm.downloadMigration('report')"><ll-icon name="description"/> Informe</button></div></div>
-      <div *ngIf="attempt.decision==='rejected'" class="info">Intento rechazado. Se conserva el historial y la fuente original.</div>
+        <div class="actions">
+          <button *ngIf="v.classification!=='divergent'" llButton variant="primary" type="button" (click)="vm.migrationDecision(true)"
+            [disabled]="vm.migrationBusy || (v.classification!=='verified_within_tests' && vm.migrationRiskReason.trim().length<20)">
+            <ll-icon name="check" size="sm"/> {{vm.migrationBusy?'Guardando…':'Aprobar versión revisada'}}</button>
+          <button llButton variant="danger" type="button" [disabled]="vm.migrationBusy" (click)="vm.migrationDecision(false)"><ll-icon name="close" size="sm"/> {{vm.migrationBusy?'Rechazando…':'Rechazar intento'}}</button>
+        </div>
+      </section>
+
+      <section *ngIf="attempt.decision==='approved'" class="panel decision done" aria-labelledby="deliver-title">
+        <h3 id="deliver-title">Versión aprobada · descarga los entregables</h3>
+        <p class="muted">El código original sigue intacto. Estas descargas corresponden a la versión modernizada que revisaste.</p>
+        <div class="actions"><button llButton variant="secondary" type="button" [disabled]="!!vm.downloading" (click)="vm.downloadMigration('zip')"><ll-icon name="archive" size="sm"/> {{vm.downloading==='zip'?'Descargando…':'Código modernizado (ZIP)'}}</button>
+          <button llButton variant="secondary" type="button" [disabled]="!!vm.downloading" (click)="vm.downloadMigration('patch')"><ll-icon name="difference" size="sm"/> {{vm.downloading==='patch'?'Descargando…':'Parche .patch'}}</button>
+          <button llButton variant="secondary" type="button" [disabled]="!!vm.downloading" (click)="vm.downloadMigration('report')"><ll-icon name="description" size="sm"/> {{vm.downloading==='report'?'Descargando…':'Informe'}}</button></div>
+      </section>
+      <p *ngIf="attempt.decision==='rejected'" class="panel info">Rechazaste este intento. El historial y el código original se conservan; puedes solicitar otra iteración en Modernize.</p>
+
+      <!-- 3. The evidence, on demand -->
+      <details class="panel evidence disclosure" *ngIf="v.before || v.after">
+        <summary>Ver la ejecución de pruebas en detalle</summary>
+        <div class="sandbox-meta">
+          <span class="meta-chip"><ll-icon name="terminal" size="sm"/> Worker: <strong>{{v.after?.worker || v.before?.worker || 'docker-local'}}</strong></span>
+          <span class="meta-chip" *ngIf="v.after?.image || v.before?.image"><ll-icon name="deployed_code" size="sm"/> Imagen: <code>{{v.after?.image || v.before?.image}}</code></span>
+          <span class="meta-chip"><ll-icon name="shield_lock" size="sm"/> Sin red, sistema de archivos de solo lectura</span>
+        </div>
+        <div class="compare-grid">
+          <div class="compare-card">
+            <div class="compare-head"><strong>Código original</strong><ll-status-badge [status]="v.before?.status || 'not_run'"/></div>
+            <small class="muted" *ngIf="v.before?.reason as beforeReason">{{beforeReason}}</small>
+            <div class="test-cases" *ngIf="v.test_names_before?.length">
+              <span class="sub-label">{{v.test_names_before!.length}} casos ejecutados</span>
+              <ul><li *ngFor="let t of v.test_names_before"><code>{{t}}</code></li></ul>
+            </div>
+            <pre class="verify-log" *ngIf="v.before?.output as beforeOut">{{beforeOut}}</pre>
+          </div>
+          <div class="compare-card">
+            <div class="compare-head"><strong>Candidato revisado</strong><ll-status-badge [status]="v.after?.status || 'not_run'"/></div>
+            <small class="muted" *ngIf="v.after?.reason as afterReason">{{afterReason}}</small>
+            <div class="test-cases" *ngIf="v.test_names_after?.length">
+              <span class="sub-label">{{v.test_names_after!.length}} casos ejecutados</span>
+              <ul><li *ngFor="let t of v.test_names_after"><code>{{t}}</code></li></ul>
+            </div>
+            <pre class="verify-log" *ngIf="v.after?.output as afterOut">{{afterOut}}</pre>
+          </div>
+        </div>
+      </details>
+      <details class="panel evidence disclosure" *ngIf="v.reviewed_sha256 || v.candidate_sha256">
+        <summary>Huellas SHA-256 y alcance</summary>
+        <div class="hash-bar">
+          <div *ngIf="v.candidate_sha256"><small>Candidato generado</small><code>{{v.candidate_sha256}}</code></div>
+          <div *ngIf="v.reviewed_sha256"><small>Versión revisada y verificada</small><code>{{v.reviewed_sha256}}</code></div>
+        </div>
+        <p class="muted limits">{{v.limits}}</p>
+      </details>
     </ng-container>
   </ng-container>
  </ng-container>

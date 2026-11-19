@@ -1,0 +1,84 @@
+name: Academic E2E (demo + browser)
+
+on:
+  push:
+    branches: [test/e2e-academic-ai]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+jobs:
+  api-journey:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - name: Install backend test dependencies
+        run: python -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt
+      - name: E2E API + separate worker + artifact export (deterministic)
+        working-directory: backend
+        run: python -m pytest -q tests/e2e/test_academic_journey.py -k demo
+      - name: Verified behavior before and after migration (Docker unittest)
+        working-directory: backend
+        env:
+          E2E_DOCKER: '1'
+        run: |
+          docker pull python:3.12-alpine
+          python -m pytest -q tests/e2e/test_academic_journey.py -k demo
+      - name: Full backend regression suite
+        working-directory: backend
+        run: python -m pytest -q tests --ignore=tests/e2e
+
+  angular-browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+      - name: Install backend and Playwright
+        run: |
+          python -m pip install -r backend/requirements.txt -r backend/requirements-dev.txt "playwright>=1.49,<2"
+          python -m playwright install chromium
+      - name: Install frontend
+        working-directory: frontend
+        run: npm ci
+      - name: Start Angular with API proxy
+        run: |
+          cd frontend
+          nohup npm start > ../angular-e2e.log 2>&1 &
+      - name: Wait for Angular dev server
+        run: |
+          for i in $(seq 1 90); do
+            if curl --fail --silent http://127.0.0.1:4200/ > /dev/null; then exit 0; fi
+            sleep 1
+          done
+          cat angular-e2e.log
+          exit 1
+      - name: 'Browser E2E: login, project, import and organizations'
+        working-directory: backend
+        env:
+          E2E_BROWSER: '1'
+          E2E_ARTIFACTS: ../test-results/e2e
+          E2E_FRONTEND_URL: http://127.0.0.1:4200
+        run: python -m pytest -q tests/e2e/test_browser_smoke.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: academic-e2e-browser-evidence
+          path: |
+            test-results/e2e/
+            angular-e2e.log
+          if-no-files-found: ignore
+
+# Deliberately no E2E_AI_PROVIDER in CI: opt-in real models consume credits,
+# depend on an authorized host CLI/API key, and must never commit credentials.

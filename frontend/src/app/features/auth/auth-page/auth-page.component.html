@@ -1,18 +1,17 @@
 <main class="auth-layout">
   <section class="auth-story" aria-label="Acerca de LegacyLift">
-    <div class="brand brand-large" aria-label="LegacyLift — Modernization Studio">
+    <div class="brand brand-large">
       <ll-brand-logo size="hero" [inverse]="true"/>
-      <span class="brand-caption">MODERNIZATION STUDIO</span>
     </div>
     <div class="auth-story-content">
-      <span class="eyebrow"><span class="eyebrow-dot"></span> MODERNIZATION STUDIO</span>
-      <h1>Entiende el legado.<br><em>Transforma con confianza.</em></h1>
+      <h2 class="story-title">Entiende el legado.<br>Transforma con confianza.</h2>
       <p>Del código heredado a un plan de modernización claro, trazable y bajo tu control.</p>
-      <div class="story-flow" aria-hidden="true">
-        <span><ll-icon name="inventory_2"/> Importar</span><ll-icon name="arrow_forward" size="sm"/>
-        <span><ll-icon name="account_tree"/> Comprender</span><ll-icon name="arrow_forward" size="sm"/>
-        <span><ll-icon name="verified"/> Verificar</span>
-      </div>
+      <ol class="story-route" aria-label="Recorrido de un proyecto">
+        <li><strong>Entender</strong><span>Inventario, arquitectura y riesgos</span></li>
+        <li><strong>Planificar</strong><span>Un plan por waves que apruebas tú</span></li>
+        <li><strong>Modernizar</strong><span>Cambios sobre una copia, verificados</span></li>
+        <li><strong>Entregar</strong><span>Código, parche e informe</span></li>
+      </ol>
     </div>
     <div class="auth-story-foot"><ll-icon name="lock" size="sm"/> Código original intacto. Decisiones siempre humanas.</div>
   </section>
@@ -25,15 +24,14 @@
     </button>
     <div class="auth-panel">
       <div class="auth-form-head">
-        <span class="eyebrow">TU WORKSPACE</span>
-        <h2>{{vm.registerMode?'Crea tu cuenta':'Bienvenido de nuevo'}}</h2>
-        <p>{{vm.registerMode?'Empieza a modernizar con un espacio de trabajo personal.':'Inicia sesión para continuar con tus proyectos.'}}</p>
+        <h1>{{vm.registerMode?'Crea tu cuenta':'Inicia sesión'}}</h1>
+        <p>{{vm.registerMode?'Tendrás un espacio personal para tus proyectos.':'Continúa con tus proyectos de modernización.'}}</p>
       </div>
       <ll-notice *ngIf="vm.error" tone="error" [message]="vm.error" (dismissed)="vm.dismiss()"/>
       <form class="auth-form" (ngSubmit)="vm.login()">
         <ng-container *ngIf="vm.registerMode">
           <div class="form-field"><label for="displayName">Nombre visible</label>
-            <input id="displayName" name="displayName" autocomplete="name" class="input" [(ngModel)]="vm.displayName" minlength="2" maxlength="100" required placeholder="Cómo quieres que te llamemos"></div>
+            <input id="displayName" name="displayName" autocomplete="name" class="input" [(ngModel)]="vm.displayName" minlength="2" maxlength="100" required placeholder="Cómo te verá tu equipo"></div>
           <div class="form-field" *ngIf="!vm.bootstrapRequired"><label for="invitationToken">Código de invitación</label>
             <input id="invitationToken" name="invitationToken" class="input" [(ngModel)]="vm.invitationToken" autocomplete="off" [required]="!vm.registrationOpen" placeholder="Solo necesario si el registro está cerrado">
             <small>Una invitación válida permite crear tu cuenta aunque el registro público esté cerrado.</small></div>
@@ -48,9 +46,7 @@
             <button type="button" class="password-toggle" [attr.aria-label]="vm.passwordVisible?'Ocultar contraseña':'Mostrar contraseña'" [attr.aria-pressed]="vm.passwordVisible" (click)="vm.passwordVisible=!vm.passwordVisible"><ll-icon [name]="vm.passwordVisible?'visibility_off':'visibility'"/></button></div>
         </div>
         <button llButton variant="primary" [block]="true" type="submit" [disabled]="vm.busy || !vm.password || !vm.email || (vm.registerMode && (vm.displayName.trim().length<2 || (vm.bootstrapRequired && !vm.bootstrapSecret) || (!vm.bootstrapRequired && !vm.registrationOpen && !vm.invitationToken.trim())))">
-          <ll-icon [name]="vm.busy?'progress_activity':vm.registerMode?'person_add':'login'"/>
-          {{vm.busy?'Procesando...':vm.registerMode?'Crear cuenta':'Iniciar sesión'}}
-          <ll-icon name="arrow_forward" size="sm"/>
+          {{vm.busy?'Un momento…':vm.registerMode?'Crear cuenta':'Iniciar sesión'}}
         </button>
       </form>
       <div class="auth-switch" *ngIf="vm.registrationOpen">
@@ -61,6 +57,5 @@
         {{vm.registerMode?'¿Ya tienes una cuenta?':'El registro público está cerrado.'}}
         <button type="button" class="text-action" (click)="vm.registerMode=!vm.registerMode;vm.dismiss()">{{vm.registerMode?'Iniciar sesión':'Tengo una invitación'}}</button></div>
     </div>
-    <footer class="auth-footer">LEGACYLIFT AI · CONTROLLED MODERNIZATION</footer>
   </section>
 </main>

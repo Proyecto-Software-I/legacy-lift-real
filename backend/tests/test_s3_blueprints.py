@@ -50,3 +50,43 @@ def test_blueprint_approved_only_after_human_action(client):
     assert db.project_get(pid)['plan_approved']==1
     res=client.post(f'/api/projects/{pid}/plan/decision',headers=headers(),json={'approved':True})
     assert res.status_code==409
+
+
+def test_ai_blueprint_accepts_list_fields_and_reports_invalid_reason(client):
+    import json
+    pid=project_ready(client)
+    fenced='```json\n'+json.dumps({
+        'title':'Plan IA Python',
+        'target_architecture':'Conservar módulo Python sin cambiar firma pública.',
+        'waves':[{
+            'id':'wave-01',
+            'goal':'Refactorizar calculator.py',
+            'strategy':'Refactor',
+            'files':['calculator.py'],
+            'depends_on':[],
+            'priority':1,
+            'risk':'Sin riesgo conocido en el fragmento.',
+            'acceptance_criteria':['Mantiene total(x)','Pasa sintaxis']
+        }],
+        'notes':['Sin manifiestos externos.']
+    })+'\n```'
+    bp=planning.proposal(pid,fenced,'codex')
+    assert 'no entregó un Blueprint JSON validable' not in bp['data']['notes']
+    assert bp['data']['waves'][0]['acceptance_criteria']=='Mantiene total(x); Pasa sintaxis'
+
+    bad=json.dumps({
+        'title':'Plan inválido',
+        'target_architecture':'Arquitectura válida suficientemente larga.',
+        'waves':[{
+            'id':'wave-01',
+            'goal':'Editar archivo inventado',
+            'strategy':'Refactor',
+            'files':['inventado.py'],
+            'depends_on':[],
+            'priority':1,
+            'risk':'Riesgo válido.',
+            'acceptance_criteria':'Criterio válido.'
+        }]
+    })
+    fallback=planning.proposal(pid,bad,'codex')
+    assert 'Archivos inválidos para wave wave-01' in fallback['data']['notes']

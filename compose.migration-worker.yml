@@ -18,11 +18,15 @@ services:
     volumes:
       - ./data:/workspace/data:rw
       # Optional: bind-mount a separate authenticated Codex home read-only for Codex CLI.
+      - ~/.codex:/root/.codex:ro
     environment:
       LEGACYLIFT_ENV: development
       LEGACYLIFT_MIGRATION_WORKER_MODE: separate
+      LEGACYLIFT_VERIFY_IN_HOST: 'true'
       LEGACYLIFT_DATA_DIR: /workspace/data
       LEGACYLIFT_MAX_MIGRATION_ATTEMPTS: ${LEGACYLIFT_MAX_MIGRATION_ATTEMPTS:-3}
       CLAUDE_API_KEY: ${CLAUDE_API_KEY:-}
       CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-5}
       CODEX_BIN: codex
+      CODEX_MODEL: ${CODEX_MODEL:-gpt-6.1-sol}
+      # Gemini (Antigravity CLI) no está en esta imagen: para proyectos Gemini usa el worker en el host.

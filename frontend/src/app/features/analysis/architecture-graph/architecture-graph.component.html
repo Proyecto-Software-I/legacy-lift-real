@@ -1,22 +1,31 @@
 <div class="graph" *ngIf="nodes.length">
-  <div class="graph-head"><div><strong>Mapa de módulos</strong><small>Selecciona un nodo para examinar sus dependencias</small></div>
-    <span>{{graph.nodes.length}} módulos · {{graph.edges.length}} conexiones</span></div>
-  <div class="graph-layout">
-    <svg class="graph-svg" viewBox="0 0 560 480" role="group" aria-label="Mapa interactivo de módulos">
-      <line *ngFor="let e of edges" [attr.x1]="e.x1" [attr.y1]="e.y1" [attr.x2]="e.x2" [attr.y2]="e.y2" class="edge" />
-      <g *ngFor="let n of nodes" class="node" [class.active]="active?.id===n.id"
-        (click)="select(n)" (keydown.enter)="select(n)" (keydown.space)="select(n);$event.preventDefault()"
-        tabindex="0" role="button" [attr.aria-label]="n.label+' · '+n.files+' archivos'" [attr.aria-pressed]="active?.id===n.id">
-        <circle [attr.cx]="n.x" [attr.cy]="n.y" r="19" />
-        <text [attr.x]="n.x" [attr.y]="n.y+39" text-anchor="middle">{{n.label.length>18?(n.label.slice(0,16)+'…'):n.label}}</text>
-      </g>
-    </svg>
-    <div class="node-info" *ngIf="active">
-      <span class="meta">MÓDULO SELECCIONADO</span><strong>{{active.label}}</strong>
-      <p>{{active.files}} archivo(s) agrupados por directorio.</p>
-      <span class="meta">DEPENDENCIAS LOCALES</span>
-      <ul><li *ngFor="let n of neighbors()">{{n.label}}</li><li *ngIf="!neighbors().length">No observadas con el analizador actual.</li></ul>
+  <div class="graph-head">
+    <div>
+      <strong>Módulos detectados ({{graph.nodes.length}})</strong>
+      <small>Selecciona un módulo para ver sus dependencias.</small>
+    </div>
+    <span class="graph-badge">{{graph.edges.length}} relaciones</span>
+  </div>
+
+  <div class="module-pills" role="group" aria-label="Mapa interactivo de módulos">
+    <button *ngFor="let n of nodes" type="button" class="module-pill"
+      [class.active]="active?.id===n.id"
+      (click)="select(n)"
+      (keydown.enter)="select(n)"
+      [attr.aria-pressed]="active?.id===n.id">
+      <strong>{{n.label}}</strong>
+      <small>{{n.files}} {{n.files===1?'archivo':'archivos'}}</small>
+    </button>
+  </div>
+
+  <div class="node-summary-box" *ngIf="active">
+    <div class="node-summary-head">
+      <strong>{{active.label}}</strong>
+      <span class="module-role" [attr.data-layer]="active.layer">{{active.roleLabel}}</span>
+    </div>
+    <div class="dep-inline">
+      <span><strong>Importa ({{active.imports.length}}):</strong> {{importsText}}</span>
+      <span><strong>Usado por ({{active.importedBy.length}}):</strong> {{importedByText}}</span>
     </div>
   </div>
-  <p class="graph-note">{{graph.note}} <span *ngIf="graph.nodes.length>28">Solo se muestran 28 nodos para mantener la vista legible.</span></p>
 </div>

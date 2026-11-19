@@ -6,7 +6,7 @@ import json
 import re
 import uuid
 from pathlib import Path
-from . import ai, db, execution, inspection, planning, workspace
+from . import ai, cobol_java, db, execution, inspection, migration_packs, planning, workspace
 from .analysis import context as analysis_context
 
 
@@ -78,14 +78,20 @@ def suggest(pid:str)->list[dict]:
       'Devuelve SOLO JSON {"cases":[{"title":"...","input":"...","expected":"...","evidence_file":"..."}]}. '
       'Cada evidence_file debe ser uno de estos archivos reales: '+json.dumps(wave['files'])+'\n'
       'Contexto: '+str(db.analysis_get(pid,project['active_snapshot_id'],'understand') or {})[:2600])
-    if project['provider']=='codex':
-        with analysis_context.scoped_workspace(pid,workspace.project_source(pid)) as isolated:
-            response=ai.generate('codex',prompt,isolated)
-    else:response=ai.generate('claude',prompt,workspace.project_source(pid))
-    match=re.search(r'\{[\s\S]*\}',response)
-    try:data=json.loads(match.group(0)) if match else {}
-    except json.JSONDecodeError:data={}
-    entries=data.get('cases') if isinstance(data,dict) else None
+    try:
+        if project['provider'] in ai.LOCAL_AGENTS:
+            with analysis_context.scoped_workspace(pid,workspace.project_source(pid)) as isolated:
+                response=ai.generate(project['provider'],prompt,isolated)
+        else:response=ai.generate('claude',prompt,workspace.project_source(pid))
+        match=re.search(r'\{[\s\S]*\}',response)
+        try:data=json.loads(match.group(0)) if match else {}
+        except json.JSONDecodeError:data={}
+        entries=data.get('cases') if isinstance(data,dict) else None
+    except ai.AIError as exc:
+        # No synthetic "AI" proposals when the model is unavailable: report the failure.
+        if ai.is_quota_error(exc):
+            raise ValueError('La cuota del proveedor de IA está agotada; no se generaron propuestas. Reintenta más tarde.') from exc
+        raise ValueError(str(exc)) from exc
     if not isinstance(entries,list):return proposals(pid)
     for case in entries[:8]:
         if not isinstance(case,dict):continue
@@ -114,18 +120,59 @@ def review(pid:str,uid:str,case_id:str,approved:bool)->dict:
     return next(x for x in proposals(pid) if x['id']==case_id)
 
 
+def _dual_run(pid:str,folder:Path,wave:dict)->dict|None:
+    """cobol-to-java: execute the original COBOL (and the Java, if present) as behaviour evidence."""
+    pack=migration_packs.selected_pack(pid,wave)
+    if not pack or pack['id']!=cobol_java.PACK_ID:return None
+    progs=cobol_java.programs(folder,wave['files'])
+    if not authorized(pid):
+        return {'status':'not_run','reason':'Ejecución no autorizada para el snapshot/blueprint/wave actuales',
+                'cobol':{'status':'not_run'},'java':{'status':'not_run'}}
+    import os
+    if os.getenv('LEGACYLIFT_WORKER_MODE','disabled').lower()!='docker-local':
+        return {'status':'not_run','reason':'Worker de ejecución no habilitado (LEGACYLIFT_WORKER_MODE=docker-local).',
+                'cobol':{'status':'not_run'},'java':{'status':'not_run'}}
+    return cobol_java.dual_run(folder,progs,run_cobol=True,run_java=bool(cobol_java.java_files(folder)))
+
+
 def capture(pid:str,folder:Path)->dict:
     project,plan=scope(pid)
     checks=inspection.static_checks(folder)
     output=execution.run_authorized(folder,authorized(pid))
     test_inventory=discover_tests(folder)
     approved=[c['id'] for c in proposals(pid) if c['status']=='approved']
+    wave=planning.executable_wave(pid)
+    dual=_dual_run(pid,folder,wave) if wave else None
     return {'schema_version':1,'snapshot_id':project['active_snapshot_id'],'blueprint_id':plan['id'],
             'blueprint_revision':plan['revision'],'wave_id':project['active_wave_id'],
             'source_hash':workspace.snapshot_hash(folder), 'static_checks':inspection.check_summary(checks),
+            'lint':inspection.lint_checks(folder),
             'details':checks[:250],'test_inventory':test_inventory,'test_cases_approved':approved,
             'tests':output,'execution_authorized':authorized(pid),
+            'gaps':gaps(test_inventory,output,authorized(pid),approved,dual),
+            **({'dual_run':dual,'java_build':cobol_java.compile_java(folder)} if dual is not None else {}),
             'methodology':'Sintaxis y manifiestos no prueban equivalencia; los casos propuestos por IA son solo especificaciones revisables.'}
+
+
+def gaps(test_inventory:list[dict],tests:dict,execution_authorized:bool,approved_cases:list[str],dual:dict|None=None)->list[str]:
+    """Explicit list of what this baseline cannot prove (product §2.4: register the gap)."""
+    out=[]
+    if dual is not None:
+        if (dual.get('cobol') or {}).get('status')=='passed':
+            out.append('La referencia de comportamiento es una sola ejecución del COBOL original (dual run); no cubre otras entradas.')
+        else:
+            out.append('No hay ejecución de referencia del COBOL original: '+str(dual.get('reason') or (dual.get('cobol') or {}).get('reason') or 'falló la ejecución'))
+        return out
+    if not test_inventory:
+        out.append('No se detectó ninguna suite de pruebas: no habrá comparación de comportamiento, solo de sintaxis.')
+    if tests.get('status')!='passed':
+        if not execution_authorized:
+            out.append('La ejecución de pruebas no fue autorizada: el baseline solo registra sintaxis y estructura.')
+        else:
+            out.append('Las pruebas no se ejecutaron con éxito ('+str(tests.get('status'))+'): '+str(tests.get('reason') or 'sin detalle'))
+    if approved_cases:
+        out.append(f'{len(approved_cases)} casos propuestos por IA están aprobados pero aún no son tests ejecutables.')
+    return out
 
 
 def markdown(data:dict)->str:
@@ -136,6 +183,20 @@ def markdown(data:dict)->str:
            '## Pruebas detectadas']
     lines += [f"- `{x['path']}` — {x['framework']}" for x in data['test_inventory']] or ['- No se detectaron suites conocidas.']
     lines += ['', '## Pruebas ejecutadas',f"- Resultado: **{t['status']}**",'- '+t.get('reason','Ejecución limitada a Docker de desarrollo con autorización explícita.'),
-              f"- Casos propuestos por IA y aprobados: {len(data['test_cases_approved'])} (no ejecutados automáticamente)",
-              '', 'Este documento no certifica equivalencia entre versiones.']
+              f"- Casos propuestos por IA y aprobados: {len(data['test_cases_approved'])} (no ejecutados automáticamente)"]
+    dual=data.get('dual_run')
+    if dual is not None:
+        lines += ['', '## Dual run del COBOL original (referencia de comportamiento)']
+        cob=dual.get('cobol') or {}
+        if cob.get('status')=='passed':
+            for program,run in cob.get('runs',{}).items():
+                lines += [f'- `{program}` en `{dual.get("image")}` (sin red, solo lectura):','```',run['stdout'].rstrip(),'```']
+        else:
+            lines.append('- No ejecutado: '+str(dual.get('reason') or cob.get('reason') or cob.get('status')))
+    lint=data.get('lint') or {}
+    if lint:
+        lines += ['', '## Lint',f"- {lint.get('warnings',0)} avisos en {lint.get('files_linted',0)} archivos Python; {lint.get('files_not_supported',0)} archivos de otros lenguajes sin lint disponible"]
+    lines += ['', '## Carencias de verificación']
+    lines += [f'- {g}' for g in data.get('gaps') or []] or ['- Ninguna detectada: hay pruebas ejecutadas para comparar.']
+    lines += ['', 'Este documento no certifica equivalencia entre versiones.']
     return '\n'.join(lines)+'\n'

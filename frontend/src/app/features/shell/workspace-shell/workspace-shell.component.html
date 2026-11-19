@@ -5,4 +5,7 @@
     <ll-workspace-topbar/>
     <ll-project-dashboard/>
   </div>
+  <div class="toast-region" aria-live="polite">
+    <ll-notice *ngIf="vm.notice" class="toast" [message]="vm.notice" (dismissed)="vm.dismiss()"/>
+  </div>
 </div>

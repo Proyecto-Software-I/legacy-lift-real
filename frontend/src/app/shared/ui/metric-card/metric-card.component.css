@@ -1,15 +1,17 @@
 /* Encapsulated styling for metric-card. */
-.ll-metric { padding: 19px 19px 17px; min-width: 0; min-height: 147px; }
+:host { display: flex; min-width: 0; }
+.ll-metric { width: 100%; height: 100%; display: flex; flex-direction: column; justify-content: space-between; gap: 10px; padding: 19px 19px 17px; min-width: 0; min-height: 152px; }
 .ll-metric-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; color: var(--color-text-secondary); font: 650 10px 'JetBrains Mono',monospace; letter-spacing: .03em; }
 .ll-metric-icon { display: grid; place-items: center; width: 32px; height: 32px; border-radius: var(--radius-sm); color: var(--color-accent); background: var(--color-accent-surface); }
-.ll-metric-value { color: var(--color-text); font-size: 30px; font-weight: 760; line-height: 1.15; letter-spacing: -.04em; margin: 13px 0 10px; overflow-wrap: anywhere; }
+.ll-metric-value { color: var(--color-text); font-size: 28px; font-weight: 760; line-height: 1.15; letter-spacing: -.03em; margin: 4px 0 0; overflow-wrap: anywhere; }
 .ll-metric-value small { font-size: 13px; color: var(--color-muted); font-weight: 600; margin-left: 6px; letter-spacing: 0; }
-.ll-metric-value-compact { font-size: 19px; letter-spacing: -.02em; margin: 17px 0 15px; }
-.ll-metric-detail { color: var(--color-muted); font-size: 11.5px; overflow-wrap: anywhere; }
+.ll-metric-value-compact { font-size: 22px; letter-spacing: -.02em; margin: 4px 0 0; }
+.ll-metric .ll-progress { margin: 2px 0 0; }
+.ll-metric-detail { color: var(--color-muted); font-size: 11.5px; margin-top: auto; overflow-wrap: anywhere; }
 
 @media (max-width:630px) {
-  .ll-metric { padding:14px; min-height:133px; }
-  .ll-metric-value { font-size:24px; }
-  .ll-metric-value-compact { font-size:17px; }
+  .ll-metric { padding:14px; min-height:136px; }
+  .ll-metric-value { font-size:23px; }
+  .ll-metric-value-compact { font-size:19px; }
   .ll-metric-head { font-size:9px; }
 }

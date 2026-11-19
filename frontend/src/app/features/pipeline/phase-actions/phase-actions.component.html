@@ -1,27 +1,19 @@
-<ng-container *ngIf="vm.selected as p">
-<section class="panel action-panel" aria-label="Próxima acción">
-              <div class="action-panel-head"><span class="eyebrow">FASE SELECCIONADA · {{vm.activeStep.sprint}}</span><span class="step-counter">{{vm.activeStep.index}} / 07</span></div>
-              <div class="action-icon"><ll-icon name="schema" size="lg"/></div>
-              <h2>{{vm.activeStep.label}}</h2><p>{{vm.activeStep.description}}</p>
-              <ll-status-badge [status]="vm.activeRun?.status || (p.phase_ready?.[vm.stageId]?'ready':'locked')"/>
-              <p class="run-message" *ngIf="vm.activeRun?.summary">{{vm.activeRun?.summary}}</p>
-              <p class="inline-error" *ngIf="vm.activeRun?.error">{{vm.activeRun?.error}}</p>
-              <button llButton variant="primary" [block]="true" type="button" class="run-button" (click)="vm.run()" [disabled]="!vm.stageRunnable || vm.busy || vm.ingestRunning">
-                <ll-icon [name]="vm.isAnyRunning?'progress_activity':'play_arrow'"/>
-                {{vm.isAnyRunning?'Ejecutando...':vm.activeRun?.status==='completed'?'Volver a ejecutar':'Ejecutar '+vm.activeStep.label}}
-              </button>
-              <p class="action-helper"><ll-icon name="security" size="sm"/> Solo se modifica una copia del sistema. El origen se conserva intacto.</p>
-            </section>
-
-            <section class="panel decision-panel" *ngIf="vm.planReady || (p.plan_approved!==null && p.plan_approved!==undefined) || vm.decisionReady || p.migration_decision">
-              <div class="eyebrow">DECISIONES HUMANAS</div><h3>Revisar y aprobar</h3>
-              <div class="decision-block" *ngIf="vm.planReady"><p>El blueprint está listo. Revísalo antes de ejecutar cambios.</p>
-                <div class="decision-actions"><button llButton variant="primary" type="button" (click)="vm.planDecision(true)"><ll-icon name="check" size="sm"/> Aprobar plan</button>
-                  <button llButton variant="secondary" type="button" (click)="vm.planDecision(false)">Rechazar</button></div></div>
-              <div class="decision-result" *ngIf="p.plan_approved!==null && p.plan_approved!==undefined && !vm.planReady"><span>Plan</span><ll-status-badge [status]="p.plan_approved===1?'approved':'rejected'"/></div>
-              <div class="decision-block" *ngIf="vm.decisionReady"><p>Compara la evidencia antes de decidir. La aprobación se realiza dentro de Verify.</p>
-                <button llButton variant="secondary" type="button" (click)="vm.chooseWorkspaceSection('verify')">Revisar resultado y decidir</button></div>
-              <div class="decision-result" *ngIf="p.migration_decision"><span>Migración</span><ll-status-badge [status]="p.migration_decision"/></div>
-            </section>
-            <section class="safe-note"><ll-icon name="shield" size="lg"/><div><strong>Modernización controlada</strong><p>El plan requiere aprobación y los resultados se pueden revisar antes de aceptarlos.</p></div></section>
-          </ng-container>
+<section class="next-step" *ngIf="guide as g" [attr.data-tone]="g.tone" aria-live="polite" aria-atomic="true">
+  <span class="next-icon" aria-hidden="true"><ll-icon [name]="g.icon"/></span>
+  <div class="next-copy">
+    <span class="next-kicker">{{g.kicker}}</span>
+    <strong class="next-title">{{g.title}}</strong>
+    <p>{{g.detail}}</p>
+    <div *ngIf="g.progress !== null && g.progress !== undefined" class="ll-progress" role="progressbar" aria-label="Progreso"
+      [attr.aria-valuenow]="g.progress" aria-valuemin="0" aria-valuemax="100"><span [style.width.%]="g.progress"></span></div>
+  </div>
+  <div class="next-actions" *ngIf="g.primary || g.rerun || g.secondary">
+    <button *ngIf="g.secondary as b" llButton variant="secondary" type="button" (click)="act(b)" [disabled]="!!b.disabled">
+      <ll-icon [name]="b.icon" size="sm"/> {{b.label}}</button>
+    <button *ngIf="g.rerun" llButton variant="ghost" size="sm" type="button" (click)="vm.run()"
+      [disabled]="!vm.stageRunnable || vm.busy || vm.ingestRunning" title="Genera de nuevo el resultado de este paso">
+      <ll-icon name="refresh" size="sm"/> Volver a ejecutar</button>
+    <button *ngIf="g.primary as a" llButton variant="primary" type="button" class="run-button" (click)="act(a)" [disabled]="!!a.disabled">
+      <ll-icon [name]="a.icon" size="sm"/> {{a.label}}</button>
+  </div>
+</section>

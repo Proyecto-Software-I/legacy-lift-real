@@ -29,10 +29,12 @@ def import_staged(pid: str, staged: Path, origin_type: str, reference: str, comm
         db.snapshot_create(pid,sid,origin_type,reference,commit,digest,manifest)
         _activate(pid,sid,reference,digest)
         # Automatic scanning; no separate manual Discover click required.
-        rid=db.run_create(pid,'discover','scanner')
+        rid=db.run_create(pid,'discover','scanner','',pipeline.model_for_phase('discover','scanner'))
         try:
             summary,info=pipeline.perform(pid,'discover',progress=progress)
-            db.run_complete(rid,summary,info)
+            prov=pipeline.provenance(pid,'discover','scanner','',info)
+            pipeline.stamp_artifact(pid,'discover',prov)
+            db.run_complete(rid,summary,{**info,'provenance':prov})
         except Exception as exc:
             db.run_fail(rid,str(exc))
             raise

@@ -1,16 +1,16 @@
 <section class="panel insight-panel" *ngIf="vm.ingestRunning || vm.discoverData" aria-label="Resultados del análisis de código">
-  <ll-section-heading eyebrow="ANÁLISIS ESTÁTICO" title="Radiografía del código"
-    description="Lenguajes y dependencias observadas. El gráfico se actualiza mientras se escanea la fuente." />
+  <ll-section-heading title="Composición del código"
+    description="Lenguajes y módulos observados en el snapshot. Se actualiza mientras se escanea." />
   <div *ngIf="vm.isAnyRunning && vm.assessmentProgress?.phase==='understand'" class="scan-state" role="status" aria-live="polite">
-    <ll-icon name="psychology" size="sm"/><span>Understand · interpretando lotes de código sin alterar el original</span>
+    <ll-icon name="psychology" size="sm"/><span>Understand está interpretando el código (sin modificar el original)</span>
     <strong>{{vm.assessmentProgress?.progress || 0}}%</strong>
   </div>
   <div *ngIf="vm.ingestRunning" class="scan-state" role="status" aria-live="polite">
     <ll-icon name="progress_activity" size="sm" />
-    <span>Escaneando archivos · {{vm.scanProgress?.scanned || 0}} / {{vm.scanProgress?.total || '…'}}</span>
+    <span>Escaneando archivos: {{vm.scanProgress?.scanned || 0}} de {{vm.scanProgress?.total || '…'}}</span>
     <strong>{{progress}}%</strong>
   </div>
-  <div class="languages-header"><strong>Composición por lenguajes</strong><span>{{vm.discoverData?.files || vm.scanProgress?.total || 0}} archivos</span></div>
+  <div class="languages-header"><strong>Lenguajes</strong><span>{{vm.discoverData?.files || vm.scanProgress?.total || 0}} archivos</span></div>
   <div class="language-bar" role="img" [attr.aria-label]="'Distribución aproximada por bytes: '+shares.length+' lenguajes'">
     <span *ngFor="let item of shares" [style.flex-basis.%]="item.percent" [style.background]="color(item.name)"
           [title]="item.name+' · '+item.percent.toFixed(1)+'%'" class="language-segment"></span>
@@ -23,6 +23,13 @@
     </div>
     <span *ngIf="!shares.length" class="empty">Los porcentajes aparecerán al leer los primeros archivos reconocidos.</span>
   </div>
-  <p class="methodology">Estimación por bytes de archivos reconocidos, no equivalente a GitHub Linguist; archivos sin lenguaje reconocido excluidos del porcentaje.</p>
+  <p class="methodology">Estimación por bytes de los archivos reconocidos (no equivale a GitHub Linguist). Los archivos sin lenguaje reconocido no cuentan en el porcentaje.</p>
+  <dl class="inventory-facts" *ngIf="vm.discoverData as d">
+    <div><dt>Puntos de entrada</dt><dd><code *ngFor="let e of d.entrypoints">{{e}}</code><span *ngIf="!d.entrypoints?.length" class="none">No identificados</span></dd></div>
+    <div><dt>Frameworks y librerías de prueba</dt><dd><span class="chip" *ngFor="let f of d.frameworks">{{f.name}}</span><span *ngIf="!d.frameworks?.length" class="none">Ninguno reconocido</span></dd></div>
+    <div><dt>Dependencias externas</dt><dd><code *ngFor="let x of d.external_dependencies?.slice(0,12)" [title]="x.declared_in_manifest ? 'Declarada en un manifiesto' : 'Solo referenciada en el código'">{{x.name}}</code>
+      <span *ngIf="!d.external_dependencies?.length" class="none">Solo biblioteca estándar o código local</span></dd></div>
+    <div><dt>Complejidad máxima</dt><dd>{{d.complexity?.max ?? 'N/D'}} <span class="none" *ngIf="d.complexity">· {{d.complexity.files_over_threshold}} archivos sobre el umbral</span></dd></div>
+  </dl>
   <ll-architecture-graph *ngIf="vm.discoverData?.graph" [graph]="vm.discoverData!.graph" />
 </section>

@@ -1,26 +1,41 @@
-<section class="panel controls-panel" *ngIf="vm.hasSource && vm.selected as p" aria-label="Privacidad y alcance del análisis">
-  <ll-section-heading eyebrow="CONFIGURACIÓN DE ANÁLISIS" title="Privacidad y alcance"
-    description="Controla qué archivos se analizarán y cuándo un proveedor de IA recibirá fragmentos de código." />
-  <div class="consent" *ngIf="p.provider!=='demo'">
-    <div class="consent-copy"><ll-icon name="shield_lock"/><div><strong>Envío de código a {{p.provider==='codex'?'Codex':'Claude'}}</strong>
-      <p>Se enviarán fragmentos del snapshot a un servicio externo mediante el backend. No autorizamos ningún envío automáticamente.</p></div></div>
-    <div class="consent-action" [class.allowed]="p.code_consent"><span>{{p.code_consent?'Autorizado para este snapshot':'No autorizado'}}</span>
-      <button llButton [variant]="p.code_consent?'secondary':'primary'" type="button" [disabled]="vm.analysisBusy || vm.isAnyRunning || vm.ingestRunning"
-        (click)="vm.updateCodeConsent(!p.code_consent)">{{p.code_consent?'Revocar':'Autorizar envío'}}</button></div>
-  </div>
-  <div class="demo-note" *ngIf="p.provider==='demo'"><ll-icon name="offline_bolt" size="sm"/> Modo Demo: el análisis se ejecuta localmente sin enviar código a modelos externos.</div>
-  <details class="selection" *ngIf="vm.sourceFiles.length">
-    <summary><ll-icon name="tune"/> Selección de archivos para la IA <strong>{{vm.selectedFileCount}} / {{vm.sourceFiles.length}}</strong><ll-icon name="expand_more" size="sm"/></summary>
-    <div class="file-tools">
-      <label for="analysis-file-search" class="sr-only">Buscar archivos de código</label>
-      <input class="input" id="analysis-file-search" [(ngModel)]="vm.fileQuery" placeholder="Filtrar por ruta o lenguaje…"/>
-      <button llButton variant="secondary" size="sm" type="button" (click)="vm.selectAllCodeFiles()">Seleccionar código</button>
+<ng-container *ngIf="vm.hasSource && vm.selected as p">
+  <section class="panel understand-summary" *ngIf="vm.understandData as u" aria-labelledby="understand-result-title">
+    <ll-section-heading title="Lo que se entendió del sistema">
+      <span class="coverage-pill" *ngIf="u.coverage">{{u.coverage['files_included'] || 0}} de {{u.coverage['files_selected'] || 0}} archivos analizados</span>
+    </ll-section-heading>
+    <p class="understand-text" id="understand-result-title">{{u.summary}}</p>
+    <div class="understand-questions" *ngIf="u.questions?.length">
+      <strong>Preguntas abiertas para revisar</strong>
+      <ul><li *ngFor="let q of u.questions">{{q}}</li></ul>
     </div>
-    <div class="file-list"><label *ngFor="let file of vm.filteredSourceFiles" class="file-row">
-      <input type="checkbox" [checked]="vm.selectedFilePaths.has(file.path)" (change)="vm.toggleSourceFile(file.path,$any($event.target).checked)"/>
-      <span class="file-path">{{file.path}}</span><small>{{file.language}} · {{file.bytes}} B</small>
-    </label></div>
-    <div class="file-footer"><span>Se muestran hasta 100 archivos coincidentes. Los límites de lotes reducen consumo de IA.</span>
-      <button llButton variant="primary" size="sm" type="button" (click)="vm.saveSourceSelection()" [disabled]="vm.analysisBusy || !vm.selectedFileCount || vm.isAnyRunning || vm.ingestRunning">Guardar selección</button></div>
-  </details>
-</section>
+  </section>
+
+  <section class="panel controls-panel" aria-label="Alcance y privacidad del análisis">
+    <ll-section-heading title="Qué se analiza" description="Elige los archivos que se interpretan y, si usas un proveedor externo, cuándo puede recibir código." />
+    <div class="consent" *ngIf="p.provider!=='demo'" [class.allowed]="p.code_consent">
+      <ll-icon [name]="p.code_consent ? 'verified_user' : 'shield_lock'"/>
+      <div class="consent-copy">
+        <strong>{{p.code_consent ? 'Envío autorizado' : 'Envío no autorizado'}} a {{vm.providerLabel(p.provider)}}</strong>
+        <p>Se envían fragmentos del snapshot a un servicio externo a través del backend. Nada se envía sin esta autorización y aplica solo al snapshot activo.</p>
+      </div>
+      <button llButton [variant]="p.code_consent?'ghost':'primary'" size="sm" type="button" [disabled]="vm.analysisBusy || vm.isAnyRunning || vm.ingestRunning"
+        (click)="vm.updateCodeConsent(!p.code_consent)">{{p.code_consent?'Revocar':'Autorizar envío'}}</button>
+    </div>
+    <p class="demo-note" *ngIf="p.provider==='demo'"><ll-icon name="offline_bolt" size="sm"/> Motor Demo: el análisis se hace localmente y no se envía código a ningún modelo.</p>
+
+    <details class="selection disclosure" *ngIf="vm.sourceFiles.length">
+      <summary>Archivos incluidos <span class="count">{{vm.selectedFileCount}} de {{vm.sourceFiles.length}}</span></summary>
+      <div class="file-tools">
+        <label for="analysis-file-search" class="sr-only">Filtrar archivos</label>
+        <input class="input" id="analysis-file-search" [(ngModel)]="vm.fileQuery" placeholder="Filtrar por ruta o lenguaje"/>
+        <button llButton variant="ghost" size="sm" type="button" (click)="vm.selectAllCodeFiles()">Seleccionar todo el código</button>
+      </div>
+      <div class="file-list"><label *ngFor="let file of vm.filteredSourceFiles" class="file-row">
+        <input type="checkbox" [checked]="vm.selectedFilePaths.has(file.path)" (change)="vm.toggleSourceFile(file.path,$any($event.target).checked)"/>
+        <span class="file-path mono">{{file.path}}</span><small>{{file.language}} · {{file.bytes}} B</small>
+      </label></div>
+      <div class="file-footer"><span>Se muestran hasta 100 archivos. Menos archivos implica menos consumo de IA.</span>
+        <button llButton variant="secondary" size="sm" type="button" (click)="vm.saveSourceSelection()" [disabled]="vm.analysisBusy || !vm.selectedFileCount || vm.isAnyRunning || vm.ingestRunning">Guardar selección</button></div>
+    </details>
+  </section>
+</ng-container>

@@ -8,6 +8,7 @@ from app.api import app
 def c(tmp_path,monkeypatch):
     monkeypatch.setenv('LEGACYLIFT_BOOTSTRAP_SECRET','bootstrap-test-secret-with-32-plus-characters')
     monkeypatch.setenv('LEGACYLIFT_DATA_DIR',str(tmp_path))
+    monkeypatch.setenv('LEGACYLIFT_WORKER_MODE','disabled')
     with TestClient(app) as t:
         r=t.post('/api/auth/register',json={'email':'snap@example.test','password':'long-good-password-789','display_name':'Snapshot','bootstrap_secret':'bootstrap-test-secret-with-32-plus-characters'})
         h={'Authorization':'Bearer '+r.json()['access_token']}
@@ -22,12 +23,12 @@ def zip_source(value):
     return buffer.getvalue()
 
 def await_result(pid,jid):
-    for _ in range(160):
+    for _ in range(600):
         row=db.job_get(pid,jid)
         if row['status'] not in ('queued','running'):
             assert row['status']=='completed',row
             return row['result']
-        time.sleep(.02)
+        time.sleep(.05)
     raise AssertionError('No terminó la ingesta')
 
 

@@ -10,9 +10,9 @@ export interface OrganizationUsage {plan:{id:string;name:string;max_projects:num
 export interface AuditEntry {id:number;user_id:string;display_name:string|null;action:string;resource:string;created_at:string;}
 
 export interface AuthResponse { access_token: string; token_type: string; expires_at: string; user?: { display_name: string; email: string; id: string }; }
-export interface Provider { id: 'codex' | 'claude' | 'demo'; name: string; ready: boolean; help: string; }
+export interface Provider { id: 'codex' | 'gemini' | 'claude' | 'demo'; name: string; ready: boolean; help: string; }
 export interface Run { id: string; phase: string; status: 'running' | 'completed' | 'failed';
-  started_at: string; finished_at?: string; error?: string; summary?: string; provider: string;
+  started_at: string; finished_at?: string; error?: string; summary?: string; provider: string; model?: string | null; prompt_hash?: string | null;
   data: Record<string, any>;
 }
 export interface IngestJob { id:string; project_id:string;kind:string;status:string;stage:string;progress:number;
@@ -41,18 +41,27 @@ export interface MigrationReviewFile {path:string;selected:boolean;comment:strin
   added:number;removed:number;reviewed_at?:string|null;}
 export interface MigrationReviewSummary {attempt_id:string;files:MigrationReviewFile[];total_files:number;
   selected_count:number;added:number;removed:number;explanation:string;selection_level:string;}
+export interface ConfidenceFactor {id:string;label:string;points:number;max:number;detail:string;}
 export interface MigrationVerification {classification:'verified_within_tests'|'partial'|'not_demonstrated'|'divergent';
-  reason:string;limits:string;files_selected:number;reviewed_sha256:string;
-  static_before:{failed:number;total:number};static_after:{failed:number;total:number};}
+  outcome?:'aprobado'|'fallido'|'sin_evidencia';evidence_kind?:'tests'|'dual_run';hardcoded_lines?:string[];
+  dual_run?:{image?:string;comparison:{program:string;equal:boolean;cobol:string;java:string}[]};confidence_factors?:ConfidenceFactor[];confidence_note?:string;
+  coverage?:{changed_files:number;covered_by_tests:number;covered:string[];ratio:number;method?:string};
+  lint_before?:{files_linted?:number;warnings?:number};lint_after?:{files_linted?:number;warnings?:number};
+  reason:string;limits:string;files_selected:number;reviewed_sha256:string;candidate_sha256?:string;
+  static_before:{failed:number;total:number;passed?:number};static_after:{failed:number;total:number;passed?:number};
+  before?:{status:string;exit_code?:number;output?:string;worker?:string;image?:string;network?:string;read_only?:boolean;reason?:string};
+  after?:{status:string;exit_code?:number;output?:string;worker?:string;image?:string;network?:string;read_only?:boolean;reason?:string};
+  test_names_before?:string[];test_names_after?:string[];confidence_score?:number|null;}
+export interface RelatedFinding {source:string;id:string|null;rule:string;severity:string;file:string|null;line:number|null;reason:string;}
 export interface MigrationWave {id:string; goal:string; strategy:string; files:string[]; depends_on:string[];
-  priority:number;risk:string;acceptance_criteria:string;}
-export interface BlueprintData {schema_version:number;title:string;target_architecture:string;source_snapshot_id:string;
-  waves:MigrationWave[]; notes:string;limitations:string;}
+  priority:number;risk:string;acceptance_criteria:string;related_findings?:RelatedFinding[];auto_included?:string[];dual_run_entry?:string[];}
+export interface BlueprintData {schema_version:number;title:string;target_architecture:string;current_architecture?:string;source_snapshot_id:string;
+  waves:MigrationWave[]; notes:string;limitations:string;origin?:'ai'|'static'|'manual';}
 export interface BaselineTest {path:string;framework:string;}
 export interface TestProposal {id:string;status:'pending'|'approved'|'rejected';data:{title:string;input:string;expected:string;evidence_file:string;source:string;note:string};}
 export interface BaselinePreflight {ready:boolean;execution_authorized:boolean;worker_mode:string;tests:BaselineTest[];proposals:TestProposal[];}
 export interface MigrationPack {id:string; name:string;status:'available'|'planned';version:string;
-  strategies:string[];languages:string[];validators:string[];description:string;}
+  strategies:string[];languages:string[];validators:string[];description:string;requires_ai?:boolean;}
 export interface PackMatch {id:string;compatible:boolean;reason:string;}
 export interface PackCatalog {packs:MigrationPack[];compatibility:Record<string,PackMatch[]>;}
 export interface Blueprint {id:string;revision:number;status:'draft'|'approved'|'rejected'|'superseded';
@@ -62,7 +71,10 @@ export interface AnalysisGraph { nodes: {id:string;label:string;files:number;kin
   edges:{from:string;to:string;type:string;inferred:boolean}[]; note:string; }
 export interface DiscoverData { schema_version:number;files:number;total_lines:number; languages:Record<string,number>;
   language_bytes:Record<string,number>; language_breakdown:LanguageShare[]; modules:string[];
-  graph:AnalysisGraph;findings:AnalysisFinding[];file_index:SourceFile[];methodology:string; }
+  graph:AnalysisGraph;findings:AnalysisFinding[];file_index:SourceFile[];methodology:string;
+  entrypoints?:string[];frameworks?:{name:string;references:number}[];
+  external_dependencies?:{name:string;references:number;declared_in_manifest:boolean}[];
+  complexity?:{max:number;files_over_threshold:number;method:string};manifests?:string[]; }
 export interface AnalysisFinding { id:string;file:string;line?:number|null;rule:string; severity:string;reason:string;
   kind:string; evidence:{file:string;line?:number|null;excerpt:string}; }
 export interface SourceFile { path:string;language:string;module:string;bytes:number;lines:number;selected:boolean; }
@@ -96,10 +108,19 @@ export const authInterceptor: HttpInterceptorFn = (req, next) => {
   }));
 };
 
+export function resolveApiBase(raw?: string): string {
+  const runtime = (globalThis as { __LEGACYLIFT_CONFIG__?: { apiBaseUrl?: string } }).__LEGACYLIFT_CONFIG__?.apiBaseUrl;
+  const trimmed = (raw ?? runtime ?? '').trim().replace(/\/+$/, '');
+  return trimmed || '/api';
+}
+
 @Injectable({ providedIn: 'root' })
 export class ApiService {
   private http = inject(HttpClient);
-  private base = '/api';
+  readonly base = resolveApiBase();
+  eventsUrl(pid: string, after: number): string {
+    return `${this.base}/projects/${pid}/events?after=${after}`;
+  }
   login(email: string, password: string): Observable<AuthResponse> {
     return this.http.post<AuthResponse>(`${this.base}/auth/login`, {email, password});
   }
@@ -149,6 +170,7 @@ export class ApiService {
     return this.http.post<IngestJob>(`${this.base}/projects/${pid}/git`,{full_name});
   }
   demoZip(): Observable<Blob> { return this.http.get('/demo-source.zip', {responseType: 'blob'}); }
+  demoCobolZip(): Observable<Blob> { return this.http.get('/demo-cobol.zip', {responseType: 'blob'}); }
   upload(pid: string, file: File): Observable<IngestJob> {
     const body = new FormData(); body.append('file', file);
     return this.http.post<IngestJob>(`${this.base}/projects/${pid}/upload`, body);

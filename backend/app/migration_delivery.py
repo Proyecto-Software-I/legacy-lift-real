@@ -27,17 +27,25 @@ def report(pid:str,aid:str) -> str:
     s=migration_review.summary(pid,aid)
     lines=['# Informe de modernización LegacyLift','',f"- Intento: `{aid}`",f"- Snapshot: `{a['snapshot_id']}`",
       f"- Blueprint: `{a['blueprint_id']}` (rev. {a['blueprint_revision']})",f"- Wave: `{a['wave_id']}`",
-      f"- Pack: `{a['pack_id']}`",f"- Decisión: **{a.get('decision') or 'pendiente'}**",'',
+      f"- Pack: `{a['pack_id']}`",f"- Decisión humana: **{ {'approved':'aprobada','rejected':'rechazada'}.get(a.get('decision') or '','pendiente') }**",'',
       '## Cambios incluidos']
     for f in s['files']:
         lines.append(f"- {'INCLUIDO' if f['selected'] else 'EXCLUIDO'} `{f['path']}`: {f['summary']} (+{f['added']}/-{f['removed']})")
         if f['comment']:lines.append('  - Comentario: '+f['comment'].replace('\n',' ')[:200])
-    lines+=['','## Verificación',f"- Clasificación: **{v.get('classification','no ejecutada')}**",
+    outcome={'aprobado':'Aprobado dentro de las pruebas','fallido':'Fallido','sin_evidencia':'Sin evidencia suficiente'}
+    lines+=['','## Verificación',f"- Resultado: **{outcome.get(v.get('outcome'),'no ejecutada')}** (`{v.get('classification','no ejecutada')}`)",
+            f"- Migration Confidence Score (orientativo): {v.get('confidence_score','N/D')}/100",
             f"- Motivo: {v.get('reason','No existen evidencias de Verify para este intento')}",
             f"- Límite: {v.get('limits','No se puede afirmar equivalencia sin pruebas comparables')}"]
     if a.get('result',{}).get('decision_reason'):
         lines += ['', '## Justificación humana', a['result']['decision_reason']]
+    for factor in v.get('confidence_factors') or []:
+        lines.append(f"  - {factor['label']}: {factor['points']}/{factor['max']} — {factor['detail']}")
     if a.get('result'):lines += ['', '## Archivos', str(a['result'].get('modified_files',[]))]
+    prov=(a.get('result') or {}).get('provenance') or {}
+    if prov:
+        lines += ['', '## Procedencia del candidato', f"- Proveedor `{prov.get('provider')}` · modelo `{prov.get('model')}` · plantilla `{prov.get('prompt_template')}`",
+                  f"- Motor realmente usado: {prov.get('engine')}"]
     return '\n'.join(lines)+'\n'
 
 
@@ -51,19 +59,22 @@ def selected_diff(pid:str,aid:str) -> str:
     parts=[]
     for f in migration_review.summary(pid,aid)['files']:
         if not f['selected']:continue
-        name=f['path'];before=(original/name).read_text(encoding='utf-8',errors='replace').splitlines(keepends=True)
+        name=f['path'];is_new=not (original/name).exists()
+        before=[] if is_new else (original/name).read_text(encoding='utf-8',errors='replace').splitlines(keepends=True)
         after=(reviewed/name).read_text(encoding='utf-8',errors='replace').splitlines(keepends=True)
-        body=''.join(difflib.unified_diff(before,after,fromfile='a/'+name,tofile='b/'+name))
+        body=''.join(difflib.unified_diff(before,after,fromfile='/dev/null' if is_new else 'a/'+name,tofile='b/'+name))
+        if is_new:body='new file mode 100644\n'+body
         parts.append('diff --git a/'+name+' b/'+name+'\n'+body)
     return ''.join(parts)
 
 
 def decide(pid:str,uid:str,approved:bool,reason:str='') -> dict:
     a=_latest(pid)
-    if a.get('decision'):raise ValueError('El intento ya tiene una decisión irreversible')
+    v=a.get('verification') or {};classification=v.get('classification')
+    if a.get('decision'):
+        raise ValueError('El intento ya tiene una decisión registrada')
     if a.get('verify_status')!='completed' or not a.get('verification') or not a.get('reviewed_sha256'):
         raise ValueError('Antes de decidir ejecuta Verify sobre los archivos seleccionados')
-    v=a['verification'];classification=v.get('classification')
     if approved and classification=='divergent':
         raise ValueError('No se puede aprobar un resultado divergente. Revisa y reintenta la wave.')
     if approved and classification!='verified_within_tests' and len(reason.strip())<20:
@@ -89,7 +100,8 @@ def decide(pid:str,uid:str,approved:bool,reason:str='') -> dict:
     return migration_runs.get(pid,a['id'])
 
 
-def export(pid:str,fmt:str='zip') -> tuple[bytes,str,str]:
+def export(pid:str,fmt:str='zip',include_docs:bool=False) -> tuple[bytes,str,str]:
+    """Approved delivery. include_docs adds every analysis/plan artifact under documentacion/."""
     a=_latest(pid)
     if a.get('decision')!='approved':raise ValueError('Aprueba explícitamente el candidato antes de exportar')
     reviewed=migration_review.reviewed_path(pid,a['id'])
@@ -113,4 +125,10 @@ def export(pid:str,fmt:str='zip') -> tuple[bytes,str,str]:
             'wave_id':a['wave_id'],'source_hash':a['source_hash'],'reviewed_hash':a['reviewed_sha256'],
             'classification':a['verification']['classification'],
             'decision':'approved','decision_reason':a['result'].get('decision_reason','')},ensure_ascii=False,indent=2))
+        if include_docs:
+            for doc in sorted(workspace.artifact_dir(pid).glob('*')):
+                if doc.is_file() and not doc.is_symlink() and doc.name in workspace.ARTIFACT_NAMES:
+                    z.write(doc,'documentacion/'+doc.name)
+    if include_docs:
+        return output.getvalue(),'application/zip','legacylift-entrega-completa.zip'
     return output.getvalue(),'application/zip','legacylift-entrega.zip'

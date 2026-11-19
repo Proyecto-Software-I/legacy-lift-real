@@ -1,20 +1,21 @@
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+html { scroll-behavior: smooth; -webkit-text-size-adjust: 100%; }
 html, body { margin: 0; min-height: 100%; }
-body { background: var(--color-bg); overflow-x: hidden; font-size: 14px; line-height: 1.55; }
-button, input, select, textarea { font: inherit; }
+body { background: var(--color-bg); color: var(--color-text); overflow-x: hidden; font-size: 14px; line-height: 1.55; -webkit-font-smoothing: antialiased; }
+button, input, select, textarea { font: inherit; color: inherit; }
 button { cursor: pointer; }
-button:disabled { cursor: not-allowed; opacity: .54; }
-a { color: var(--color-accent); }
+button:disabled { cursor: not-allowed; opacity: .5; }
+a { color: var(--color-text); text-underline-offset: 3px; }
 button, a, input, select, textarea, summary { -webkit-tap-highlight-color: transparent; }
-:where(button, a, input, select, textarea, summary):focus-visible {
-  outline: 2px solid var(--color-focus); outline-offset: 3px;
+:where(button, a, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-focus); outline-offset: 2px;
 }
 h1, h2, h3, h4, p { margin-top: 0; }
-h1, h2, h3 { line-height: 1.22; letter-spacing: -.035em; }
-h1 { font-size: clamp(2rem, 3vw, 2.75rem); }
-h2 { font-size: 1.34rem; }
-h3 { font-size: 1.05rem; }
+h1, h2, h3 { line-height: 1.2; letter-spacing: -.02em; font-weight: 700; }
+h1 { font-size: 1.95rem; }
+h2 { font-size: 1.25rem; }
+h3 { font-size: 1rem; letter-spacing: -.01em; }
+code, pre, kbd { font-family: var(--font-mono); font-size: .92em; }
 ::selection { color: var(--color-on-accent); background: var(--color-accent); }
 * { scrollbar-color: var(--color-scrollbar) transparent; scrollbar-width: thin; }
 .sr-only { position: absolute!important; width: 1px; height: 1px; overflow: hidden; clip: rect(0,0,0,0); white-space: nowrap; clip-path: inset(50%); }
@@ -23,21 +24,26 @@ ll-section-heading, ll-stage-card, ll-notice, ll-metric-card { display: block; }
 ll-status-badge { display: inline-flex; }
 ll-dialog { display: contents; }
 ll-icon { display: inline-flex; align-items: center; justify-content: center; flex: none; vertical-align: middle; }
-ll-icon .material-symbols-outlined { font-size: 21px; }
-ll-icon.icon-small .material-symbols-outlined { font-size: 18px; }
-ll-icon.icon-large .material-symbols-outlined { font-size: 30px; }
-.ambient { pointer-events: none; position: fixed; z-index: 0; width: 360px; height: 360px; border-radius: 50%; filter: blur(110px); opacity: .085; }
-.ambient-one { right: -220px; top: 80px; background: var(--color-accent); opacity: .027; }
-.ambient-two { bottom: -200px; left: -250px; background: var(--color-text-secondary); opacity: .022; }
-.eyebrow { color: var(--color-accent); font: 650 10px/1.5 'JetBrains Mono', monospace; letter-spacing: .11em; text-transform: uppercase; }
-.eyebrow-dot { display: inline-block; background: currentColor; height: 6px; width: 6px; border-radius: 50%; margin-right: 8px; box-shadow: 0 0 9px color-mix(in srgb, var(--color-accent) 35%, transparent); }
-.panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-panel); }
-.help-text, .section-hint { color: var(--color-muted); font-size: 12px; }
-.inline-error { color: var(--color-danger); font-size: 12px; overflow-wrap: anywhere; }
-.text-action { padding: 3px 0; background: transparent; border: 0; color: var(--color-accent); font-weight: 700; }
-.text-action:hover { text-decoration: underline; }
+ll-icon .material-symbols-outlined { font-size: 20px; }
+ll-icon.icon-small .material-symbols-outlined { font-size: 17px; }
+ll-icon.icon-large .material-symbols-outlined { font-size: 28px; }
+/* Ambient glows are retired; kept as no-ops so the root template stays stable. */
+.ambient { display: none; }
+/* Small sentence-case kicker. Used sparingly, only where it adds context. */
+.eyebrow { color: var(--color-muted); font: 600 12px/1.4 var(--font-ui); letter-spacing: 0; }
+.panel { background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); }
+.help-text, .section-hint { color: var(--color-muted); font-size: 12.5px; }
+.inline-error { color: var(--color-danger); font-size: 12.5px; overflow-wrap: anywhere; }
+.text-action { padding: 3px 0; background: transparent; border: 0; color: var(--color-text); font-weight: 650; text-decoration: underline; text-decoration-color: var(--color-border-strong); text-underline-offset: 4px; }
+.text-action:hover { text-decoration-color: currentColor; }
 .danger-link { color: var(--color-danger); }
-
-/* Backgrounds, inputs and tooltips are theme-aware; future screens use tokens only. */
-body { color: var(--color-text); }
+.mono { font-family: var(--font-mono); }
+.muted { color: var(--color-muted); }
+/* Native disclosure: one consistent affordance everywhere. */
+details > summary { cursor: pointer; list-style: none; }
+details > summary::-webkit-details-marker { display: none; }
+.disclosure > summary { display: flex; align-items: center; gap: 8px; color: var(--color-text-secondary); font-size: 13px; font-weight: 600; padding: 6px 0; }
+.disclosure > summary::before { content: ''; width: 7px; height: 7px; border-right: 1.6px solid currentColor; border-bottom: 1.6px solid currentColor; transform: rotate(-45deg); transition: transform var(--transition-fast); margin: 0 3px 0 2px; }
+.disclosure[open] > summary::before { transform: rotate(45deg); }
+.disclosure > summary:hover { color: var(--color-text); }
 @media (prefers-reduced-motion: reduce) { html {scroll-behavior: auto;} }

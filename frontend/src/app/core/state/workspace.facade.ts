@@ -78,6 +78,9 @@ export class WorkspaceFacade {
   private readonly _busy = signal<boolean>(false);
   get busy(): boolean { return this._busy(); }
   set busy(value: boolean) { this._busy.set(value); }
+  private readonly _loadingProject = signal<boolean>(false);
+  get loadingProject(): boolean { return this._loadingProject(); }
+  set loadingProject(value: boolean) { this._loadingProject.set(value); }
   private readonly _error = signal<string>('');
   get error(): string { return this._error(); }
   set error(value: string) { this._error.set(value); }
@@ -124,6 +127,27 @@ export class WorkspaceFacade {
   private readonly _blueprintSaving = signal<boolean>(false);
   get blueprintSaving():boolean{return this._blueprintSaving();}
   set blueprintSaving(value:boolean){this._blueprintSaving.set(value);}
+  private readonly _planBusy = signal<boolean>(false);
+  get planBusy():boolean{return this._planBusy();}
+  set planBusy(value:boolean){this._planBusy.set(value);}
+  private readonly _pendingWaveId = signal<string|null>(null);
+  get pendingWaveId():string|null{return this._pendingWaveId();}
+  set pendingWaveId(value:string|null){this._pendingWaveId.set(value);}
+  private readonly _pendingProposalId = signal<string|null>(null);
+  get pendingProposalId():string|null{return this._pendingProposalId();}
+  set pendingProposalId(value:string|null){this._pendingProposalId.set(value);}
+  private readonly _migrationBusy = signal<boolean>(false);
+  get migrationBusy():boolean{return this._migrationBusy();}
+  set migrationBusy(value:boolean){this._migrationBusy.set(value);}
+  private readonly _downloading = signal<string|null>(null);
+  get downloading():string|null{return this._downloading();}
+  set downloading(value:string|null){this._downloading.set(value);}
+  private readonly _pendingJobId = signal<string|null>(null);
+  get pendingJobId():string|null{return this._pendingJobId();}
+  set pendingJobId(value:string|null){this._pendingJobId.set(value);}
+  private readonly _githubBusy = signal<boolean>(false);
+  get githubBusy():boolean{return this._githubBusy();}
+  set githubBusy(value:boolean){this._githubBusy.set(value);}
   private readonly _migrationAttempts=signal<MigrationAttempt[]>([]);
   get migrationAttempts():MigrationAttempt[]{return this._migrationAttempts();}
   set migrationAttempts(v:MigrationAttempt[]){this._migrationAttempts.set(v);}
@@ -142,7 +166,15 @@ export class WorkspaceFacade {
   private readonly _migrationWorkerSeen=signal<string|null>(null);
   get migrationWorkerSeen():string|null{return this._migrationWorkerSeen();}
   set migrationWorkerSeen(v:string|null){this._migrationWorkerSeen.set(v);}
-  get latestMigration():MigrationAttempt|undefined{return this.migrationAttempts[0];}
+  get latestMigration():MigrationAttempt|undefined{
+    const p=this.selected;
+    if(!p||!p.active_wave_id)return undefined;
+    return this.migrationAttempts.find(a=>
+      a.wave_id===p.active_wave_id
+      &&(!p.active_snapshot_id||a.snapshot_id===p.active_snapshot_id)
+      &&(!this.blueprint?.id||a.blueprint_id===this.blueprint.id)
+    );
+  }
   private readonly _stageId = signal<string>('discover');
   get stageId(): string { return this._stageId(); }
   set stageId(value: string) { this._stageId.set(value); }
@@ -227,9 +259,16 @@ export class WorkspaceFacade {
   private readonly _reviewDraft = signal<Record<string,string>>({});
   get reviewDraft(): Record<string,string> { return this._reviewDraft(); }
   set reviewDraft(value: Record<string,string>) { this._reviewDraft.set(value); }
+  private readonly _savingReviewIds = signal<Set<string>>(new Set());
+  private readonly _savedReviewId = signal<string>('');
+  isReviewSaving(id: string): boolean { return this._savingReviewIds().has(id); }
+  isReviewSaved(id: string): boolean { return this._savedReviewId() === id; }
   private readonly _analysisBusy = signal<boolean>(false);
   get analysisBusy(): boolean { return this._analysisBusy(); }
   set analysisBusy(value: boolean) { this._analysisBusy.set(value); }
+  private readonly _understandData = signal<Record<string,any> | null>(null);
+  get understandData(): Record<string,any> | null { return this._understandData(); }
+  set understandData(value: Record<string,any> | null) { this._understandData.set(value); }
   private readonly _assessmentData = signal<AssessmentData | null>(null);
   get assessmentData(): AssessmentData | null { return this._assessmentData(); }
   set assessmentData(value: AssessmentData | null) { this._assessmentData.set(value); }
@@ -278,10 +317,11 @@ export class WorkspaceFacade {
     this.mobileNavOpen=false;this.projects=[];this.organizations=[];this.createOrganizationId='';this.providers=[];this.selected=undefined;
     this.snapshots=[];this.ingestJobs=[];this.githubConfigured=false;this.githubLogin='';this.githubRepos=[];this.selectedRepo='';
     this.discoverData=null;this.scanProgress=null;this.sourceFiles=[];this.selectedFilePaths=new Set();
-    this.reviews=[];this.reviewDraft={};this.assessmentData=null;this.assessmentProgress=null;this.blueprint=null;this.blueprintDraft=null;this.packs=null;this.baselinePreflight=null;this.migrationAttempts=[];this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.migrationRiskReason='';this.migrationWorkerSeen=null;this.workspaceSection='source';
+    this.reviews=[];this.reviewDraft={};this.understandData=null;this.assessmentData=null;this.assessmentProgress=null;this.blueprint=null;this.blueprintDraft=null;this.packs=null;this.baselinePreflight=null;this.migrationAttempts=[];this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.migrationRiskReason='';this.migrationWorkerSeen=null;this.workspaceSection='source';
     this.artifactContent='';this.artifactName='';this.rendered='';this.showCreate=false;this.showEdit=false;this.showHelp=false;
     this.createName='';this.createSystem='';this.projectQuery='';this.stageId='discover';
-    this.error='';this.notice='';this.busy=false;this.uploading=false;this.analysisBusy=false;
+    this.error='';this.notice='';this.busy=false;this.loadingProject=false;this.uploading=false;this.analysisBusy=false;
+    this.planBusy=false;this.pendingWaveId=null;this.pendingProposalId=null;this.migrationBusy=false;this.downloading=null;this.pendingJobId=null;this.githubBusy=false;
     this.sessionCheckFailed=false;
   }
 
@@ -297,33 +337,138 @@ export class WorkspaceFacade {
     });
   }
 
+  private static readonly STEP_ORDER = ['source','discover','understand','assess','plan','baseline','modernize','verify','evidence'] as const;
+
+  isStepGateComplete(id: string): boolean {
+    if (!this.selected) return false;
+    if (id === 'source') return this.hasSource && !this.ingestRunning;
+    if (id === 'discover') return this.isStepGateComplete('source') && this.latestRun('discover')?.status === 'completed';
+    if (id === 'understand') return this.isStepGateComplete('discover') && this.latestRun('understand')?.status === 'completed';
+    if (id === 'assess') return this.isStepGateComplete('understand') && this.latestRun('assess')?.status === 'completed';
+    if (id === 'plan') return this.isStepGateComplete('assess') && this.latestRun('plan')?.status === 'completed' && this.selected.plan_approved === 1 && !!this.selected.active_wave_id;
+    if (id === 'baseline') return this.isStepGateComplete('plan') && this.latestRun('baseline')?.status === 'completed';
+    if (id === 'modernize') return this.isStepGateComplete('baseline') && this.latestRun('modernize')?.status === 'completed' && this.latestMigration?.status === 'completed';
+    if (id === 'verify') {
+      const v = this.latestMigration?.verification;
+      // Product §9: the result always needs an explicit human approval, even when tests pass.
+      return this.isStepGateComplete('modernize') && this.latestRun('verify')?.status === 'completed' && this.latestMigration?.verify_status === 'completed' && !!v && this.selected.migration_decision === 'approved';
+    }
+    if (id === 'evidence') return this.isStepGateComplete('verify');
+    return false;
+  }
+
+  canNavigateTo(section: string): boolean {
+    if (section === 'source') return true;
+    const idx = WorkspaceFacade.STEP_ORDER.indexOf(section as any);
+    if (idx <= 0) return true;
+    return this.isStepGateComplete(WorkspaceFacade.STEP_ORDER[idx - 1]);
+  }
+
+  get nextStepId(): string | null {
+    const idx = WorkspaceFacade.STEP_ORDER.indexOf(this.workspaceSection as any);
+    if (idx < 0 || idx >= WorkspaceFacade.STEP_ORDER.length - 1) return null;
+    return WorkspaceFacade.STEP_ORDER[idx + 1];
+  }
+
+  get nextStepLabel(): string {
+    const next = this.nextStepId;
+    if (!next) return '';
+    if (next === 'evidence') return 'Entregables';
+    return STAGES.find(s => s.id === next)?.label || next;
+  }
+
+  get canAdvanceNext(): boolean {
+    const next = this.nextStepId;
+    return !!next && this.canNavigateTo(next) && !this.isAnyRunning && !this.ingestRunning;
+  }
+
+  advanceToNextStep(): void {
+    const next = this.nextStepId;
+    if (next && this.canNavigateTo(next)) {
+      this.chooseWorkspaceSection(next);
+    }
+  }
+
   get stages(): StageView[] {
-    return STAGES.map(s => {
-      const latest = this.latestRun(s.id);
-      const status = latest?.status === 'running' ? 'running'
-          : latest?.status === 'completed' ? 'completed'
-          : latest?.status === 'failed' ? 'failed'
-          : this.selected?.phase_ready?.[s.id] ? 'ready' : 'locked';
-      return {...s, status};
-    });
+    return STAGES.map(s => ({...s, status: this.stageStatus(s.id) as any}));
   }
   get activeStep() { return STAGES.find(s => s.id === this.stageId) ?? STAGES[0]; }
   get activeRun(): Run | undefined { return this.latestRun(this.stageId); }
-  get completedCount(): number { return STAGES.filter(s => this.latestRun(s.id)?.status === 'completed').length; }
+  get completedCount(): number { return STAGES.filter(s => this.stageStatus(s.id) === 'completed').length; }
   get ingestRunning(): boolean { return this.ingestJobs.some(j=>j.status==='queued'||j.status==='running'); }
   get hasSource(): boolean { return !!this.selected?.snapshot_hash; }
   get planReady(): boolean { return this.latestRun('plan')?.status === 'completed' && this.selected?.plan_approved == null; }
   get decisionReady(): boolean { return this.latestMigration?.verify_status==='completed' && !!this.latestMigration?.verification && !this.latestMigration?.decision; }
   get isAnyRunning(): boolean { return !!this.selected?.runs?.some(r => r.status === 'running'); }
   get stageRunnable(): boolean { return !!this.selected?.phase_ready?.[this.stageId] && !this.isAnyRunning; }
+  /** Human name of an analysis engine; one source of truth for every screen. */
+  providerLabel(id?: string | null): string {
+    return ({codex:'Codex', gemini:'Gemini', claude:'Claude', demo:'Demo sin IA'} as Record<string,string>)[id || ''] || 'Demo sin IA';
+  }
   get chosenProvider(): Provider | undefined { return this.providers.find(p => p.id === this.selected?.provider); }
+  /** Which provider/model/template produced the latest result of a phase (product §9). */
+  provenance(stage: string): {provider:string;model:string;template:string;engine:string;fallback:boolean}|null {
+    const run = this.latestRun(stage);
+    if (!run || run.status !== 'completed') return null;
+    const prov = (run.data || {})['provenance'] || {};
+    return {provider: prov.provider || run.provider, model: prov.model || run.model || '', template: prov.prompt_template || '',
+      engine: prov.engine || '', fallback: !!prov.fallback};
+  }
 
   latestRun(stage: string): Run | undefined {
     return [...(this.selected?.runs || [])].reverse().find(r => r.phase === stage);
   }
-  stageStatus(stage: string): string { return this.latestRun(stage)?.status || 'pending'; }
-  displayStatus(status: string): string {
-    return ({completed:'Completado',running:'Ejecutando',failed:'Error',ready:'Disponible',locked:'Bloqueado',pending:'Pendiente'} as Record<string,string>)[status] || status;
+  stageStatus(stage: string): string {
+    const latest = this.latestRun(stage);
+    if (latest?.status === 'running') return 'running';
+    if (stage === 'modernize' && (this.latestMigration?.status === 'queued' || this.latestMigration?.status === 'running')) return 'running';
+    if (stage === 'verify' && (this.latestMigration?.verify_status === 'queued' || this.latestMigration?.verify_status === 'running')) return 'running';
+    if (latest?.status === 'failed') return 'failed';
+    if (stage === 'modernize' && this.latestMigration?.status === 'failed') return 'failed';
+    if (stage === 'verify' && (this.latestMigration?.verify_status === 'failed' || this.latestMigration?.verification?.classification === 'divergent')) return 'failed';
+    if (!this.canNavigateTo(stage)) return 'locked';
+    if (stage === 'verify') {
+      return this.isStepGateComplete('verify') ? 'completed' : 'ready';
+    }
+    if (!this.isStepGateComplete(stage)) return 'ready';
+    return 'completed';
+  }
+  displayStatus(status: string, stage?: string): string {
+    if (status === 'completed' && stage === 'verify' && this.latestMigration?.verification?.classification === 'verified_within_tests') {
+      return 'Correcto';
+    }
+    return ({completed:'Completado',running:'Ejecutando',failed:'Error',ready:'Actual',locked:'Pendiente',pending:'Pendiente'} as Record<string,string>)[status] || status;
+  }
+  get currentPhaseTitle(): string {
+    if (this.workspaceSection === 'source') return 'Paso 0 · Código Fuente';
+    if (this.workspaceSection === 'evidence') return 'Entregables y Evidencias';
+    const step = this.activeStep;
+    return `Paso ${step.index} · ${step.label}`;
+  }
+  get currentPhaseFeedback(): string {
+    if (!this.selected) return '';
+    if (this.ingestRunning) return `Importando y escaneando fuente (${this.scanProgress?.percent || 0}%)…`;
+    if (!this.hasSource) return 'Sube un archivo ZIP o usa un ejemplo para iniciar.';
+    if (this.isAnyRunning) {
+      const running = [...(this.selected.runs || [])].reverse().find(r => r.status === 'running');
+      return `Ejecutando ${(running?.phase || this.stageId).toUpperCase()}…`;
+    }
+    const sec = this.workspaceSection;
+    if (sec === 'source') return 'Fuente lista. Avanza al paso 1 (Discover) para revisar el inventario.';
+    if (sec === 'evidence') return `${this.selected.artifacts?.length || 0} artefactos listos para consulta y descarga.`;
+    if (this.stageId === 'plan' && this.latestRun('plan')?.status === 'completed') {
+      if (this.selected.plan_approved !== 1) return 'Paso actual: Aprueba el Blueprint para continuar.';
+      if (!this.selected.active_wave_id) return 'Paso actual: Aprueba una Wave compatible para desbloquear Baseline.';
+    }
+    if (this.stageId === 'verify' && this.isStepGateComplete('verify')) {
+      return this.latestMigration?.verification?.classification === 'verified_within_tests'
+        ? 'Verificación correcta: todas las pruebas equivalentes pasaron antes y después.'
+        : 'Verificación aprobada. Puedes descargar los entregables.';
+    }
+    if (this.isStepGateComplete(this.stageId)) {
+      return `Resultado listo. Revisa la información y avanza a ${this.nextStepLabel}.`;
+    }
+    return `Paso actual: Pulsa «Ejecutar ${this.activeStep.label}» para procesar esta fase.`;
   }
   readableDate(value?: string): string {
     return value ? new Date(value).toLocaleString('es-BO', {dateStyle:'short',timeStyle:'short'}) : '—';
@@ -332,8 +477,17 @@ export class WorkspaceFacade {
     const http = err as HttpErrorResponse;
     this.error = typeof http?.error?.detail === 'string' ? http.error.detail : http?.message || String(err);
     this.busy = false; this.uploading = false;
+    this.planBusy = false; this.pendingWaveId = null; this.pendingProposalId = null;
+    this.migrationBusy = false; this.downloading = null; this.pendingJobId = null; this.githubBusy = false;
   }
-  toast(msg: string): void { this.notice = msg; this.error = ''; }
+  private noticeTimer?: ReturnType<typeof setTimeout>;
+  /** Confirmations are transient: they auto-dismiss so they never linger next to a newer state.
+   * Errors stay until dismissed because they require the person to act. */
+  toast(msg: string): void {
+    this.notice = msg; this.error = '';
+    if (this.noticeTimer) clearTimeout(this.noticeTimer);
+    this.noticeTimer = setTimeout(() => { if (this.notice === msg) this.notice = ''; }, 5200);
+  }
   dismiss(): void { this.notice = ''; this.error = ''; }
 
   login(): void {
@@ -418,20 +572,25 @@ export class WorkspaceFacade {
     }});
   }
   connectGithub(): void {
+    if (this.githubBusy) return;
+    this.githubBusy = true;
     this.api.githubConnect().subscribe({next:r=>window.location.assign(r.url),error:e=>this.showError(e)});
   }
   disconnectGithub(): void {
-    this.api.githubDisconnect().subscribe({next:()=>{this.githubLogin='';this.githubRepos=[];this.toast('GitHub desconectado.');},error:e=>this.showError(e)});
+    if (this.githubBusy) return;
+    this.githubBusy = true;
+    this.api.githubDisconnect().subscribe({next:()=>{this.githubBusy=false;this.githubLogin='';this.githubRepos=[];this.toast('GitHub desconectado.');},error:e=>this.showError(e)});
   }
   editProject(): void {
     if (!this.selected) return;
     this.editName=this.selected.name;this.editSystem=this.selected.system_name;this.showEdit=true;
   }
   saveProject(): void {
-    if (!this.selected) return;
+    if (!this.selected || this.busy) return;
     const pid=this.selected.id;
+    this.busy=true;
     this.api.rename(pid,this.editName,this.editSystem).subscribe({next:()=>{
-      this.showEdit=false;this.refreshSelected();this.loadProjects();this.toast('Proyecto actualizado.');
+      this.busy=false;this.showEdit=false;this.refreshSelected();this.loadProjects();this.toast('Proyecto actualizado.');
     },error:e=>this.showError(e)});
   }
   create(): void {
@@ -453,12 +612,16 @@ export class WorkspaceFacade {
     if (!token) return;
     const requestId = ++this.selectedRequestId;
     this.eventsAbort?.abort();this.lastEventId=0;this.ingestJobs=[];
-    this.discoverData=null;this.scanProgress=null;this.sourceFiles=[];this.reviews=[];this.assessmentData=null;this.assessmentProgress=null;this.selectedFilePaths=new Set();
-    this.selected = undefined; this.artifactContent=''; this.artifactName=''; this.stageId='discover';this.workspaceSection='source';
+    this.discoverData=null;this.scanProgress=null;this.sourceFiles=[];this.reviews=[];this.understandData=null;this.assessmentData=null;this.assessmentProgress=null;this.selectedFilePaths=new Set();
+    this.selected = undefined; this.loadingProject = true; this.artifactContent=''; this.artifactName=''; this.stageId='discover';this.workspaceSection='source';
     this.api.project(pid).subscribe({next:p=>{
       if(this.session.token!==token || requestId!==this.selectedRequestId) return;
-      this.selected=p; this.pickFirstArtifact(); this.loadSnapshots(pid);this.loadJobs(pid);this.loadDiscover(pid);this.loadAnalysisControls(pid);this.loadReviews(pid);this.loadAssessment(pid);this.loadBlueprint(pid);this.loadBaselinePreflight(pid);this.loadMigration(pid);this.connectEvents(pid);
-    },error:e=>{if(this.session.token===token)this.showError(e);}});
+      this.loadingProject = false;
+      this.selected=p; this.pickFirstArtifact(); this.loadSnapshots(pid);this.loadJobs(pid);this.loadDiscover(pid);this.loadAnalysisControls(pid);this.loadReviews(pid);this.loadUnderstand(pid);this.loadAssessment(pid);this.loadBlueprint(pid);this.loadBaselinePreflight(pid);this.loadMigration(pid,true);this.connectEvents(pid);
+      const currentStep = WorkspaceFacade.STEP_ORDER.find(s => !this.isStepGateComplete(s)) || 'verify';
+      this.workspaceSection = currentStep;
+      if (STAGES.some(x => x.id === currentStep)) this.stageId = currentStep;
+    },error:e=>{if(this.session.token===token && requestId===this.selectedRequestId){this.loadingProject=false;this.showError(e);}}});
   }
   refreshSelected(silent=false): void {
     if (!this.selected) return;
@@ -471,10 +634,10 @@ export class WorkspaceFacade {
       this.selected=updated;
       if (!silent || sourceChanged) { this.loadSnapshots(pid);this.loadJobs(pid); }
       this.loadMigration(pid);
-      if (sourceChanged) {this.blueprint=null;this.blueprintDraft=null;this.baselinePreflight=null;this.pickFirstArtifact();this.loadDiscover(pid);this.loadAnalysisControls(pid);this.loadReviews(pid);this.loadAssessment(pid);}
+      if (sourceChanged) {this.blueprint=null;this.blueprintDraft=null;this.baselinePreflight=null;this.pickFirstArtifact();this.loadDiscover(pid);this.loadAnalysisControls(pid);this.loadReviews(pid);this.loadUnderstand(pid);this.loadAssessment(pid);}
       if (hadRunning && !this.isAnyRunning) {
         if (this.activeRun?.status === 'completed') {
-          this.toast('Fase completada; consulta el artefacto generado.');this.loadReviews(pid);this.loadAssessment(pid);this.loadBlueprint(pid);
+          this.toast('Fase completada; consulta el artefacto generado.');this.loadReviews(pid);this.loadUnderstand(pid);this.loadAssessment(pid);this.loadBlueprint(pid);
           this.openArtifact(this.activeStep.file);
         } else if (this.activeRun?.status === 'failed') {
           this.error=this.activeRun.error || 'La operación falló';
@@ -489,6 +652,10 @@ export class WorkspaceFacade {
     else if (arr.length) this.openArtifact(arr[0]);
   }
   chooseStage(id: string): void {
+    if (!this.canNavigateTo(id)) {
+      this.toast('Completa primero el paso actual antes de avanzar.');
+      return;
+    }
     this.stageId=id;this.workspaceSection=id;
     const step=STAGES.find(x=>x.id===id);
     if (step && this.selected?.artifacts?.includes(step.file)) this.openArtifact(step.file);
@@ -504,15 +671,17 @@ export class WorkspaceFacade {
     }}});
   }
   retryJob(jid: string): void {
-    if (!this.selected) return;
+    if (!this.selected || this.pendingJobId) return;
+    this.pendingJobId=jid;
     this.api.retry(this.selected.id,jid).subscribe({next:()=>{
-      this.toast('Ingesta reintentada.');this.loadJobs(this.selected!.id);
+      this.pendingJobId=null;this.toast('Ingesta reintentada.');this.loadJobs(this.selected!.id);
     },error:e=>this.showError(e)});
   }
   cancelJob(jid: string): void {
-    if (!this.selected) return;
+    if (!this.selected || this.pendingJobId) return;
+    this.pendingJobId=jid;
     this.api.cancel(this.selected.id,jid).subscribe({next:()=>{
-      this.toast('Trabajo cancelado.');this.loadJobs(this.selected!.id);
+      this.pendingJobId=null;this.toast('Trabajo cancelado.');this.loadJobs(this.selected!.id);
     },error:e=>this.showError(e)});
   }
   private async connectEvents(pid: string): Promise<void> {
@@ -521,39 +690,56 @@ export class WorkspaceFacade {
     try {
       const token=this.session.token;
       if (!token) return;
-      const response=await fetch(`/api/projects/${pid}/events?after=${this.lastEventId}`, {
+      const response=await fetch(this.api.eventsUrl(pid, this.lastEventId), {
         headers:{Authorization:`Bearer ${token}`},signal:controller.signal,cache:'no-store'
       });
       if (!response.ok || !response.body) return; // Polling remains as fallback.
       const reader=response.body.getReader();const decoder=new TextDecoder();let buffer='';
+      let initialChunk=true;
       while(!controller.signal.aborted) {
         const {value,done}=await reader.read();if(done) break;
         buffer+=decoder.decode(value,{stream:true}).replace(/\r\n/g,'\n');
         const frames=buffer.split('\n\n');buffer=frames.pop() || '';
+        let sawUpdate=false; let sawDiscover=false; let sawAssess=false; let sawBaseline=false; let sawBlueprint=false; let sawMigration=false;
         for(const frame of frames) {
           const id=frame.match(/^id: (\d+)/m);
           if(id) this.lastEventId=Math.max(this.lastEventId,Number(id[1]));
           if(frame.includes('event: update') && this.selected?.id===pid) {
+            sawUpdate=true;
             const match=frame.match(/^data: (.+)$/m);
             if (match) {
               try {
                 const evt=JSON.parse(match[1]);
                 if(evt.kind==='analysis-progress') this.scanProgress=evt.payload as ScanProgress;
-                if(evt.kind==='analysis' && evt.payload?.phase==='discover') this.loadDiscover(pid);
-                if(evt.kind==='analysis' && evt.payload?.phase==='assess') this.loadAssessment(pid);
-                if(evt.kind==='wave'||evt.kind==='baseline')this.loadBaselinePreflight(pid);
-                if(evt.kind==='blueprint') this.loadBlueprint(pid);
-                if(evt.kind==='migration'||evt.kind==='verify'||evt.kind==='migration-review')this.loadMigration(pid);
+                if(evt.kind==='analysis' && evt.payload?.phase==='discover') sawDiscover=true;
+                if(evt.kind==='analysis' && evt.payload?.phase==='assess') sawAssess=true;
+                if(evt.kind==='wave'||evt.kind==='baseline') sawBaseline=true;
+                if(evt.kind==='blueprint') sawBlueprint=true;
+                if(evt.kind==='migration'||evt.kind==='verify'||evt.kind==='migration-review') sawMigration=true;
                 if(evt.kind==='analysis-stage') this.assessmentProgress=evt.payload;
               } catch { /* Ignore malformed event; polling is the fallback. */ }
             }
-            this.refreshSelected(true);this.loadJobs(pid);
           }
         }
+        if (sawUpdate && !initialChunk && this.selected?.id===pid) {
+          if(sawDiscover) this.loadDiscover(pid);
+          if(sawAssess) this.loadAssessment(pid);
+          if(sawBaseline) this.loadBaselinePreflight(pid);
+          if(sawBlueprint) this.loadBlueprint(pid);
+          if(sawMigration) this.loadMigration(pid);
+          this.refreshSelected(true);this.loadJobs(pid);
+        }
+        initialChunk=false;
       }
     } catch(e) { if(!controller.signal.aborted) { /* polling fallback */ } }
   }
   get isAssessRunning():boolean {return this.latestRun('assess')?.status==='running';}
+  loadUnderstand(pid:string):void {
+    this.api.analysisPhase(pid,'understand').subscribe({next:r=>{
+      if(this.selected?.id===pid && this.selected.active_snapshot_id===r.snapshot_id)
+        this.understandData=r.data;
+    },error:()=>{/* No snapshot or understand yet. */}});
+  }
   loadAssessment(pid:string):void {
     this.api.analysisPhase(pid,'assess').subscribe({next:r=>{
       if(this.selected?.id===pid && this.selected.active_snapshot_id===r.snapshot_id)
@@ -611,11 +797,29 @@ export class WorkspaceFacade {
   }
   setReviewDraft(id:string, comment:string):void { this.reviewDraft={...this.reviewDraft,[id]:comment}; }
   updateReview(row:ReviewItem,status:'pending'|'confirmed'|'discarded'):void {
-    if(!this.selected)return;
+    if(!this.selected || this.isReviewSaving(row.id))return;
     const pid=this.selected.id;
-    this.api.reviewItem(pid,row.id,status,this.reviewDraft[row.id]||'').subscribe({next:()=>{
-      this.loadReviews(pid);this.toast('Revisión guardada en el snapshot activo.');
-    },error:e=>this.showError(e)});
+    const prevStatus=row.status;
+    const prevComment=row.comment;
+    const nextComment=this.reviewDraft[row.id]||'';
+    const nextSaving=new Set(this._savingReviewIds());
+    nextSaving.add(row.id);
+    this._savingReviewIds.set(nextSaving);
+    this.reviews=this.reviews.map(r=>r.id===row.id?{...r,status,comment:nextComment}:r);
+    this.api.reviewItem(pid,row.id,status,nextComment).subscribe({next:()=>{
+      const done=new Set(this._savingReviewIds());
+      done.delete(row.id);
+      this._savingReviewIds.set(done);
+      this._savedReviewId.set(row.id);
+      setTimeout(()=>{if(this._savedReviewId()===row.id)this._savedReviewId.set('');},2500);
+      this.toast('Revisión guardada en el snapshot activo.');
+    },error:e=>{
+      const done=new Set(this._savingReviewIds());
+      done.delete(row.id);
+      this._savingReviewIds.set(done);
+      this.reviews=this.reviews.map(r=>r.id===row.id?{...r,status:prevStatus,comment:prevComment}:r);
+      this.showError(e);
+    }});
   }
   loadDiscover(pid: string): void {
     this.api.discover(pid).subscribe({next: r=>{
@@ -667,6 +871,19 @@ export class WorkspaceFacade {
       }, error: e => this.showError(e)
     });
   }
+  loadCobolDemo(): void {
+    if (!this.selected || this.uploading) return;
+    const pid = this.selected.id; this.uploading = true; this.scanProgress = null;
+    this.api.demoCobolZip().subscribe({
+      next: blob => {
+        const file = new File([blob], 'demo-cobol.zip', {type: 'application/zip'});
+        this.api.upload(pid, file).subscribe({
+          next: job => { this.uploading = false; this.toast(`Ejemplo COBOL: ingesta ${job.id.slice(0,8)} en ejecución.`); this.loadJobs(pid); },
+          error: e => this.showError(e)
+        });
+      }, error: e => this.showError(e)
+    });
+  }
   run(): void {
     if (!this.selected || !this.stageRunnable) return;
     this.busy=true;
@@ -683,6 +900,10 @@ export class WorkspaceFacade {
     },error:()=>{/* Older version or plan not generated. */}});
   }
   chooseWorkspaceSection(section:string):void {
+    if (!this.canNavigateTo(section)) {
+      this.toast('Completa primero el paso actual antes de avanzar.');
+      return;
+    }
     this.workspaceSection=section;
     if(STAGES.some(stage=>stage.id===section))this.chooseStage(section);
   }
@@ -708,30 +929,63 @@ export class WorkspaceFacade {
     },error:e=>{this.baselineBusy=false;this.showError(e);}});
   }
   decideTestProposal(id:string,approved:boolean):void {
-    if(!this.selected)return;
-    const pid=this.selected.id;
+    if(!this.selected||this.pendingProposalId)return;
+    const pid=this.selected.id;this.pendingProposalId=id;
     this.api.baselineReview(pid,id,approved).subscribe({next:()=>{
-      this.loadBaselinePreflight(pid);this.toast(approved?'Caso propuesto aprobado (aún no se ejecuta automáticamente).':'Propuesta descartada.');
+      this.pendingProposalId=null;this.loadBaselinePreflight(pid);this.toast(approved?'Caso propuesto aprobado (aún no se ejecuta automáticamente).':'Propuesta descartada.');
     },error:e=>this.showError(e)});
   }
   loadPacks(pid:string):void {
     this.api.migrationPacks(pid).subscribe({next:r=>{if(this.selected?.id===pid)this.packs=r;},error:()=>{/* existing endpoints stay available */}});
   }
   waveDecision(wid:string,approved:boolean):void {
-    if(!this.selected)return;const pid=this.selected.id;
+    if(!this.selected||this.planBusy)return;const pid=this.selected.id;this.planBusy=true;this.pendingWaveId=wid;
     this.api.decideWave(pid,wid,approved).subscribe({next:r=>{
-      this.blueprint=r;this.blueprintDraft=structuredClone(r.data);this.refreshSelected();this.loadBaselinePreflight(pid);
+      this.planBusy=false;this.pendingWaveId=null;this.blueprint=r;this.blueprintDraft=structuredClone(r.data);this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.refreshSelected();this.loadBaselinePreflight(pid);this.loadMigration(pid);
       this.toast(approved?'Wave aprobada y seleccionada. Puedes ejecutar Baseline.':'Wave rechazada.');
     },error:e=>this.showError(e)});
   }
   selectWave(wid:string):void {
-    if(!this.selected)return;const pid=this.selected.id;
+    if(!this.selected||this.planBusy)return;const pid=this.selected.id;this.planBusy=true;this.pendingWaveId=wid;
     this.api.selectWave(pid,wid).subscribe({next:r=>{
-      this.blueprint=r;this.refreshSelected();this.loadBaselinePreflight(pid);this.toast('Wave seleccionada; baseline anterior invalidado.');
+      this.planBusy=false;this.pendingWaveId=null;this.blueprint=r;this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.refreshSelected();this.loadBaselinePreflight(pid);this.loadMigration(pid);this.toast('Wave seleccionada; baseline anterior invalidado.');
     },error:e=>this.showError(e)});
   }
   updateBlueprintDraft(data:BlueprintData):void {
     this.blueprintDraft={...data,waves:data.waves.map(w=>({...w,files:[...w.files],depends_on:[...w.depends_on]}))};
+  }
+  /** Packs that can actually run today for this project's provider. */
+  get executableStrategies():string[] {
+    const demo=this.selected?.provider==='demo';
+    return [...new Set((this.packs?.packs||[]).filter(p=>p.status==='available' && !(p.requires_ai && demo)).flatMap(p=>p.strategies))];
+  }
+  /** Executable strategies whose pack supports every language in the wave (current one excluded). */
+  strategyOptions(wave:MigrationWave):string[] {
+    const langs=new Set(wave.files.map(f=>this.sourceFiles.find(x=>x.path===f)?.language || 'Otro'));
+    const demo=this.selected?.provider==='demo';
+    const packs=(this.packs?.packs||[]).filter(p=>p.status==='available' && !(p.requires_ai && demo) && [...langs].every(l=>p.languages.includes(l)));
+    // Language migration first: it is the pack's distinctive transformation when available.
+    const order=(s:string)=>s==='LanguageMigration'?0:1;
+    // Translation needs real programs, not only copybooks.
+    const hasProgram=wave.files.some(f=>/\.(cbl|cob|cobol)$/i.test(f));
+    return [...new Set(packs.flatMap(p=>p.strategies))]
+      .filter(s=>s!==wave.strategy && (s!=='LanguageMigration' || hasProgram)).sort((a,b)=>order(a)-order(b));
+  }
+  /** A wave blocked only by its strategy can be unblocked by switching to an executable one. */
+  strategyFix(wave:MigrationWave):string|null {
+    if(this.packMatch(wave).compatible) return null;
+    return this.strategyOptions(wave)[0] || null;
+  }
+  strategyLabel(strategy:string):string {
+    return ({LanguageMigration:'Migrar COBOL a Java',Refactor:'Refactor en el mismo lenguaje'} as Record<string,string>)[strategy] || strategy;
+  }
+  /** Saves a new Blueprint revision with the wave's strategy replaced. Approvals reset,
+   * exactly as a manual edit would; the person still approves plan and wave explicitly. */
+  adoptStrategy(waveId:string,strategy:string):void {
+    if(!this.selected||!this.blueprint||this.blueprintSaving)return;
+    const base=this.blueprint.data;
+    this.blueprintDraft={...base,waves:base.waves.map(w=>w.id===waveId?{...w,strategy,files:[...w.files],depends_on:[...w.depends_on]}:{...w,files:[...w.files],depends_on:[...w.depends_on]})};
+    this.saveBlueprint();
   }
   saveBlueprint():void {
     if(!this.selected||!this.blueprintDraft||this.blueprintSaving)return;
@@ -743,18 +997,24 @@ export class WorkspaceFacade {
     },error:e=>{this.blueprintSaving=false;this.showError(e);}});
   }
   planDecision(approved:boolean): void {
-    if (!this.selected) return;
+    if (!this.selected || this.planBusy) return;
+    this.planBusy=true;
     this.api.plan(this.selected.id,approved).subscribe({
-      next:()=>{this.toast(approved?'Blueprint aprobado. Revisa y aprueba una wave antes de preparar el baseline.':'Plan rechazado.');this.refreshSelected();this.loadBlueprint(this.selected!.id);},
+      next:()=>{this.planBusy=false;this.toast(approved?'Blueprint aprobado. Revisa y aprueba una wave antes de preparar el baseline.':'Plan rechazado.');this.refreshSelected();this.loadBlueprint(this.selected!.id);},
       error:e=>this.showError(e)
     });
   }
-  loadMigration(pid:string):void {
+  loadMigration(pid:string, focusActiveStep=false):void {
     this.api.migrationAttempts(pid).subscribe({next:r=>{
       if(this.selected?.id!==pid)return;
       const previous=this.latestMigration?.id;
       this.migrationAttempts=r.attempts;
       this.migrationWorkerSeen=r.worker?.last_seen ?? null;
+      if (focusActiveStep) {
+        const currentStep = WorkspaceFacade.STEP_ORDER.find(s => !this.isStepGateComplete(s)) || 'verify';
+        this.workspaceSection = currentStep;
+        if (STAGES.some(x => x.id === currentStep)) this.stageId = currentStep;
+      }
       const active=this.latestMigration;
       if(!active || active.status!=='completed') {this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';return;}
       if(previous!==active.id){this.migrationDiffFile='';this.migrationDiffText='';}
@@ -781,22 +1041,25 @@ export class WorkspaceFacade {
     },error:e=>this.showError(e)});
   }
   retryMigration():void {
-    if(!this.selected||!this.latestMigration)return;
-    const pid=this.selected.id;
+    if(!this.selected||!this.latestMigration||this.migrationBusy)return;
+    const pid=this.selected.id;this.migrationBusy=true;
     this.api.migrationRetry(pid,this.latestMigration.id).subscribe({next:()=>{
-      this.toast('Nuevo intento encolado; requiere el worker separado.');this.refreshSelected();this.loadMigration(pid);
+      this.migrationBusy=false;this.toast('Nuevo intento encolado; requiere el worker separado.');this.refreshSelected();this.loadMigration(pid);
     },error:e=>this.showError(e)});
   }
   migrationDecision(approved:boolean):void {
-    if(!this.selected||!this.latestMigration)return;
+    if(!this.selected||!this.latestMigration||this.migrationBusy)return;
+    this.migrationBusy=true;
     this.api.decision(this.selected.id,approved,this.migrationRiskReason).subscribe({next:()=>{
-      this.toast(approved?'Candidato aprobado. Puedes descargar ZIP, parche e informe.':'Intento rechazado. Se conserva el historial.');
+      this.migrationBusy=false;this.toast(approved?'Candidato aprobado. Puedes descargar ZIP, parche e informe.':'Intento rechazado. Se conserva el historial.');
       this.migrationRiskReason='';this.refreshSelected();this.loadMigration(this.selected!.id);
     },error:e=>this.showError(e)});
   }
   downloadMigration(format:'zip'|'patch'|'report'):void {
-    if(!this.selected)return;
+    if(!this.selected||this.downloading)return;
+    this.downloading=format;
     this.api.migrationDelivery(this.selected.id,format).subscribe({next:blob=>{
+      this.downloading=null;
       const url=URL.createObjectURL(blob),a=document.createElement('a');
       a.href=url;a.download=format==='zip'?'legacylift-entrega.zip':format==='patch'?'legacylift-changes.patch':'legacylift-report.md';
       a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);
@@ -814,10 +1077,13 @@ export class WorkspaceFacade {
   copyArtifact(): void { if (this.artifactContent) navigator.clipboard.writeText(this.artifactContent)
       .then(()=>this.toast('Contenido copiado')).catch(()=>this.toast('No se pudo copiar; selecciona el texto manualmente.')); }
   download(): void {
-    if (!this.selected) return;
+    if (!this.selected || this.downloading) return;
+    this.downloading='evidence';
     this.api.export(this.selected.id).subscribe({next: blob=>{
+      this.downloading=null;
       const url=URL.createObjectURL(blob);
-      const el=document.createElement('a');el.href=url;el.download='legacylift-evidencias.zip';el.click();
+      const name=this.selected?.migration_decision==='approved'?'legacylift-entrega-completa.zip':'legacylift-evidencias.zip';
+      const el=document.createElement('a');el.href=url;el.download=name;el.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
     }, error:e=>this.showError(e)});
   }

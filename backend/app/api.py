@@ -71,7 +71,7 @@ class NewProject(BaseModel):
     organization_id: str | None = None
     name: str = Field(min_length=3, max_length=80)
     system_name: str = Field(min_length=2, max_length=80)
-    provider: str = Field(pattern='^(codex|claude|demo)$')
+    provider: str = Field(pattern='^(codex|gemini|claude|demo)$')
 
 
 def public_job(job: dict) -> dict:
@@ -399,7 +399,10 @@ def start_phase(pid: str, phase: str, user: dict = Depends(current_user)) -> dic
         if phase == 'modernize':
             return migration_runs.enqueue(pid,user['id'])
         if phase == 'verify':
-            return migration_verify.enqueue(pid)
+            res = migration_verify.enqueue(pid)
+            if os.getenv('LEGACYLIFT_WORKER_MODE','disabled').lower() == 'docker-local' and os.getenv('LEGACYLIFT_VERIFY_IN_HOST','false').lower() == 'true':
+                pipeline.executor.submit(migration_verify.run_one)
+            return res
         return pipeline.start(pid, phase)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc
@@ -566,12 +569,13 @@ def get_artifact(pid: str, filename: str, user: dict = Depends(current_user)) ->
 @app.get('/api/projects/{pid}/export')
 def export(pid: str, user: dict = Depends(current_user)) -> Response:
     project = ensure_project(pid, user)
+    # Approved migration: full delivery (modernized code + migration evidence + analysis docs).
     if project['migration_decision'] == 'approved' and migration_runs.history(pid):
-        payload,_,_ = migration_delivery.export(pid,'zip')
+        payload,_,name = migration_delivery.export(pid,'zip',include_docs=True)
     else:
-        payload = workspace.export_zip(pid,False)
+        payload,name = workspace.export_zip(pid,False),'legacylift-evidencias.zip'
     return Response(payload, media_type='application/zip',
-                    headers={'Content-Disposition': 'attachment; filename="legacylift-evidencias.zip"'})
+                    headers={'Content-Disposition': f'attachment; filename="{name}"'})
 
 
 class OrganizationCreate(BaseModel):

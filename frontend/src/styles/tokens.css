@@ -1,48 +1,62 @@
-/* LegacyLift semantic tokens. The official wordmark is monochrome.
- * These are UI surface choices informed by the black/white brand, NOT a
- * purported brand manual. Semantic status colors are separate from the brand. */
+/* LegacyLift semantic tokens.
+ * The wordmark is monochrome, so primary actions are drawn in "ink" (white on dark,
+ * black on light). One extra hue — terminal amber — has a single meaning across the
+ * product: "this needs you". It marks the current station of the route and any human
+ * decision, never decoration. Status colors (info/success/danger) stay separate. */
 :root, :root[data-theme="dark"] {
   color-scheme: dark;
-  font-family: 'DM Sans', system-ui, sans-serif;
+  font-family: 'Schibsted Grotesk', system-ui, sans-serif;
   font-synthesis: none;
-  --color-bg: #0b0b0d;
-  --color-sidebar: #101012;
-  --color-surface: #18181b;
-  --color-surface-raised: #202024;
-  --color-panel-subtle: #121215;
-  --color-input: #111114;
-  --color-hover: #2a2a2e;
-  --color-border: #323237;
-  --color-border-strong: #4a4a51;
-  --color-text: #f6f6f7;
-  --color-text-secondary: #c7c7cd;
-  --color-muted: #a0a0a9;
-  --color-accent: #f6f6f7;
-  --color-accent-hover: #dcdce0;
-  --color-on-accent: #151517;
-  --color-accent-surface: #29292e;
-  --color-accent-border: #595960;
-  --color-info: #accdf7;
-  --color-info-surface: #1e3045;
-  --color-info-border: #486184;
-  --color-success: #97e6bd;
-  --color-success-surface: #172d23;
-  --color-success-border: #3f6853;
-  --color-danger: #ffb5bd;
-  --color-danger-surface: #3b2228;
-  --color-danger-border: #81505b;
-  --color-focus: #fff;
-  --color-shade: #16161a;
-  --color-shade-soft: #232327;
-  --color-auth-gradient: linear-gradient(145deg,#111114,#1a1a1e 70%,#24242a);
-  --color-topbar: #121215eb;
-  --color-scrollbar: #55555e;
-  --color-overlay: #060608d9;
-  --shadow-panel: 0 1px 3px #0003;
+  --font-ui: 'Schibsted Grotesk', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+
+  --color-bg: #111214;
+  --color-sidebar: #0c0d0e;
+  --color-surface: #18191c;
+  --color-surface-raised: #1f2024;
+  --color-panel-subtle: #141518;
+  --color-input: #0f1012;
+  --color-hover: #26282c;
+  --color-border: #2c2e33;
+  --color-border-strong: #43464d;
+  --color-text: #f3f3f1;
+  --color-text-secondary: #c4c5c9;
+  --color-muted: #9a9ca3;
+  --color-accent: #f3f3f1;
+  --color-accent-hover: #d9d9d6;
+  --color-on-accent: #121315;
+  --color-accent-surface: #26282c;
+  --color-accent-border: #55585f;
+
+  --color-signal: #f0b54a;
+  --color-signal-text: #f5c56c;
+  --color-signal-surface: #2b220f;
+  --color-signal-border: #6b5122;
+
+  --color-info: #a9c9f5;
+  --color-info-surface: #172536;
+  --color-info-border: #3c5577;
+  --color-success: #8fdcb2;
+  --color-success-surface: #13261d;
+  --color-success-border: #355e48;
+  --color-danger: #ffaab4;
+  --color-danger-surface: #341d22;
+  --color-danger-border: #7a4652;
+  --color-focus: #f0b54a;
+  --color-shade: #141518;
+  --color-shade-soft: #222428;
+  --color-auth-gradient: linear-gradient(160deg,#0c0d0e,#141518 65%,#1b1c20);
+  --color-topbar: #111214;
+  --color-scrollbar: #4a4d54;
+  --color-overlay: #050506cc;
+  --shadow-panel: none;
+  --shadow-float: 0 18px 50px #0009;
   --shadow-dialog: 0 30px 90px #000a;
+
+  --radius-xs: 6px;
   --radius-sm: 8px;
-  --radius-md: 12px;
-  --radius-lg: 18px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
   --space-1: 4px;
   --space-2: 8px;
   --space-3: 12px;
@@ -51,47 +65,54 @@
   --space-6: 24px;
   --space-8: 32px;
   --space-10: 40px;
-  --page-width: 1440px;
-  --sidebar-width: 272px;
+  --page-width: 1240px;
+  --sidebar-width: 264px;
   --transition-fast: 140ms ease;
   background: var(--color-bg);
   color: var(--color-text);
 }
 :root[data-theme="light"] {
   color-scheme: light;
-  --color-bg: #f7f7f7;
-  --color-sidebar: #fff;
-  --color-surface: #fff;
-  --color-surface-raised: #f3f3f4;
-  --color-panel-subtle: #fafafa;
-  --color-input: #fff;
-  --color-hover: #eeeeef;
-  --color-border: #dcdce0;
-  --color-border-strong: #bcbcc3;
-  --color-text: #1b1b1f;
-  --color-text-secondary: #45454c;
-  --color-muted: #686871;
-  --color-accent: #1b1b1f;
-  --color-accent-hover: #3c3c43;
-  --color-on-accent: #fff;
-  --color-accent-surface: #ebebed;
-  --color-accent-border: #aaaaaf;
-  --color-info: #215b9b;
-  --color-info-surface: #e8f2fd;
-  --color-info-border: #a7c5e6;
-  --color-success: #176343;
-  --color-success-surface: #e8f6ed;
-  --color-success-border: #9ac9b1;
-  --color-danger: #a42f41;
-  --color-danger-surface: #fff0f1;
-  --color-danger-border: #d9a3ad;
-  --color-focus: #242428;
-  --color-shade: #f4f4f5;
-  --color-shade-soft: #e9e9ec;
-  --color-auth-gradient: linear-gradient(145deg,#111114,#1a1a1e 70%,#24242a);
-  --color-topbar: #fffffff0;
-  --color-scrollbar: #a1a1a8;
-  --color-overlay: #060608aa;
-  --shadow-panel: 0 1px 5px #1111;
+  --color-bg: #f3f4f6;
+  --color-sidebar: #ffffff;
+  --color-surface: #ffffff;
+  --color-surface-raised: #f6f7f8;
+  --color-panel-subtle: #f8f9fa;
+  --color-input: #ffffff;
+  --color-hover: #eceef1;
+  --color-border: #dfe1e5;
+  --color-border-strong: #b9bcc3;
+  --color-text: #16171a;
+  --color-text-secondary: #3f4148;
+  --color-muted: #62656d;
+  --color-accent: #16171a;
+  --color-accent-hover: #34363c;
+  --color-on-accent: #ffffff;
+  --color-accent-surface: #eceef1;
+  --color-accent-border: #a7aab1;
+
+  --color-signal: #c98a12;
+  --color-signal-text: #8a5a00;
+  --color-signal-surface: #fdf4df;
+  --color-signal-border: #e6c47c;
+
+  --color-info: #1f5895;
+  --color-info-surface: #e9f2fc;
+  --color-info-border: #a9c6e7;
+  --color-success: #15603f;
+  --color-success-surface: #e7f5ec;
+  --color-success-border: #98c9ae;
+  --color-danger: #a32d3f;
+  --color-danger-surface: #fdeef0;
+  --color-danger-border: #dba3ad;
+  --color-focus: #8a5a00;
+  --color-shade: #f3f4f6;
+  --color-shade-soft: #e8eaed;
+  --color-auth-gradient: linear-gradient(160deg,#0c0d0e,#141518 65%,#1b1c20);
+  --color-topbar: #f3f4f6;
+  --color-scrollbar: #a1a4ab;
+  --color-overlay: #0a0b0d88;
+  --shadow-panel: none;
+  --shadow-float: 0 16px 40px #10121826;
   --shadow-dialog: 0 26px 65px #10101835;
 }

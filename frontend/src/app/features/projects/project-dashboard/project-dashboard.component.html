@@ -1,63 +1,109 @@
 <main class="page-content">
-      <header class="page-header">
-        <div><div class="eyebrow">{{vm.selected?'PROYECTO / '+vm.selected.system_name:'WORKSPACE / BIENVENIDA'}}</div>
-          <h1>{{vm.selected?.name || 'Tus proyectos'}}<span class="header-accent">.</span></h1>
-          <p>{{vm.selected?'Gestiona la fuente, revisa la evidencia y avanza a la próxima fase.':'Importa tu primer sistema y empieza con un análisis controlado.'}}</p></div>
-        <div class="page-actions" *ngIf="vm.selected">
-          <button llButton variant="secondary" type="button" (click)="vm.editProject()"><ll-icon name="edit" size="sm"/> Editar proyecto</button>
-          <button llButton variant="secondary" type="button" (click)="vm.download()"><ll-icon name="download" size="sm"/> Exportar</button>
+  <ll-notice *ngIf="vm.error" tone="error" [message]="vm.error" (dismissed)="vm.dismiss()" class="page-error"/>
+  <button *ngIf="vm.sessionCheckFailed" llButton variant="secondary" type="button" class="retry-connection" (click)="vm.bootstrap()"><ll-icon name="refresh" size="sm"/> Reintentar conexión</button>
+
+  <ng-container *ngIf="vm.selected as p; else noProjectView">
+    <header class="project-header">
+      <div class="project-title">
+        <h1>{{p.name}}</h1>
+        <p class="project-meta">
+          <span>{{p.system_name}}</span>
+          <span><ll-icon name="memory" size="sm"/> {{providerName(p.provider)}}</span>
+          <span *ngIf="vm.hasSource" class="meta-file"><ll-icon name="folder_zip" size="sm"/> {{p.source_filename || 'Código importado'}}</span>
+        </p>
+      </div>
+      <div class="page-actions">
+        <button llButton variant="ghost" size="sm" type="button" (click)="vm.editProject()"><ll-icon name="edit" size="sm"/> Editar</button>
+      </div>
+    </header>
+
+    <div class="workspace-layout">
+      <nav class="route phase-navigation" aria-label="Recorrido de modernización">
+        <div class="route-progress">
+          <span><strong>{{completedStations}}</strong> de {{totalStations}} pasos completados</span>
+          <span class="route-meter" aria-hidden="true"><span [style.width.%]="completedStations*100/totalStations"></span></span>
         </div>
-      </header>
-
-      <ll-notice *ngIf="vm.error" tone="error" [message]="vm.error" (dismissed)="vm.dismiss()"/>
-      <button *ngIf="vm.sessionCheckFailed" llButton variant="secondary" type="button" (click)="vm.bootstrap()"><ll-icon name="refresh" size="sm"/> Reintentar conexión</button>
-      <ll-notice *ngIf="vm.notice" [message]="vm.notice" (dismissed)="vm.dismiss()"/>
-
-      <ng-container *ngIf="vm.selected as p; else emptyState">
-        <section class="metrics-grid" aria-label="Indicadores del proyecto">
-          <ll-metric-card title="FASES COMPLETADAS" [value]="vm.completedCount.toString()" suffix="/ 7" icon="checklist" [progress]="vm.completedCount/7*100" [detail]="vm.completedCount===7?'Proceso completado':'Continúa con la siguiente etapa'"/>
-          <ll-metric-card title="SNAPSHOT ACTIVO" [value]="vm.hasSource?'Listo':'Pendiente'" [compact]="true" icon="inventory_2" [detail]="vm.hasSource?'SHA-256 · '+p.snapshot_hash?.substring(0,12)+'…':'Importa ZIP o GitHub'"/>
-          <ll-metric-card title="PROVEEDOR IA" [value]="p.provider==='codex'?'Codex':p.provider==='claude'?'Claude':'Demo local'" [compact]="true" icon="neurology" [detail]="p.provider==='demo'?'Sin consumo de tokens':'Configurado en el servidor'"/>
-          <ll-metric-card title="MIGRACIÓN" [value]="p.migration_decision==='approved'?'Aprobada':p.migration_decision==='rejected'?'Rechazada':vm.isAnyRunning?'Ejecutando':'Pendiente'" [compact]="true" icon="verified_user" [detail]="p.plan_approved===1?'Plan aprobado':'Requiere aprobación humana'"/>
-        </section>
-
-        <nav class="phase-navigation" role="tablist" aria-label="Etapas del proyecto">
-          <button type="button" role="tab" *ngFor="let tab of workspaceTabs" [class.active]="vm.workspaceSection===tab.id"
-            [attr.aria-selected]="vm.workspaceSection===tab.id" [attr.aria-controls]="'phase-'+tab.id" [attr.id]="'tab-'+tab.id"
-            (click)="vm.chooseWorkspaceSection(tab.id)">
-            <ll-icon [name]="tab.icon" size="sm"/><span>{{tab.label}}</span>
-            <small *ngIf="tab.id!=='source' && tab.id!=='evidence'">{{vm.displayStatus(vm.stageStatus(tab.id))}}</small>
-          </button>
-        </nav>
-
-        <div class="workspace-grid" *ngIf="vm.workspaceSection!=='evidence'" role="tabpanel"
-          [id]="'phase-'+vm.workspaceSection" [attr.aria-labelledby]="'tab-'+vm.workspaceSection">
-          <div class="workspace-main-column" [ngSwitch]="vm.workspaceSection">
-            <ng-container *ngSwitchCase="'source'"><ll-source-panel/><ll-pipeline-panel/></ng-container>
-            <ng-container *ngSwitchCase="'discover'"><ll-discover-overview/><ll-review-queue/></ng-container>
-            <ng-container *ngSwitchCase="'understand'"><ll-analysis-controls/><ll-review-queue/></ng-container>
-            <ng-container *ngSwitchCase="'assess'"><ll-assessment-overview/><ll-review-queue/></ng-container>
-            <ng-container *ngSwitchCase="'plan'"><ll-blueprint-editor/><ll-migration-packs/></ng-container>
-            <ng-container *ngSwitchCase="'baseline'"><ll-baseline-panel/><ll-migration-packs/></ng-container>
-            <ng-container *ngSwitchCase="'modernize'"><ll-migration-review/></ng-container>
-            <ng-container *ngSwitchCase="'verify'"><ll-verify-result/></ng-container>
-            <ng-container *ngSwitchDefault><section class="panel stage-focus"><h2>{{vm.activeStep.label}}</h2>
-              <p>{{vm.activeStep.description}}. Ejecuta la fase desde el panel lateral y revisa los resultados en Evidencias.</p>
-              <button llButton variant="secondary" type="button" (click)="vm.chooseWorkspaceSection('evidence')"><ll-icon name="description" size="sm"/> Ver evidencias</button>
-            </section></ng-container>
-          </div>
-          <aside class="workspace-side-column" aria-label="Acciones y decisiones" *ngIf="vm.workspaceSection!=='source'">
-            <ll-phase-actions/>
-          </aside>
+        <div class="route-list" role="tablist" aria-orientation="vertical" aria-label="Pasos del proyecto" (keydown)="onRouteKey($event)">
+          <ng-container *ngFor="let group of groups">
+            <span class="route-group" aria-hidden="true">{{group}}</span>
+            <button type="button" role="tab" class="station" *ngFor="let tab of stationsIn(group)"
+              [disabled]="!vm.canNavigateTo(tab.id)"
+              [class.active]="vm.workspaceSection===tab.id"
+              [attr.data-status]="needsDecision(tab.id) && tabStatus(tab.id)==='ready' ? 'decision' : tabStatus(tab.id)"
+              [attr.aria-selected]="vm.workspaceSection===tab.id"
+              [attr.tabindex]="vm.workspaceSection===tab.id ? 0 : -1"
+              [attr.aria-controls]="'phase-'+tab.id" [attr.id]="'tab-'+tab.id"
+              (click)="vm.chooseWorkspaceSection(tab.id)">
+              <span class="station-node" aria-hidden="true">
+                <ll-icon *ngIf="tabStatus(tab.id)==='completed'" name="check" size="sm"/>
+                <ll-icon *ngIf="tabStatus(tab.id)==='failed'" name="priority_high" size="sm"/>
+              </span>
+              <span class="station-copy">
+                <span class="station-label">{{tab.label}}</span>
+                <small>{{tabLabelStatus(tab.id)}}</small>
+              </span>
+            </button>
+          </ng-container>
         </div>
-        <div role="tabpanel" id="phase-evidence" aria-labelledby="tab-evidence" *ngIf="vm.workspaceSection==='evidence'">
-          <ll-artifacts-panel/>
-        </div>
-      </ng-container>
+      </nav>
 
-      <ng-template #emptyState><div class="welcome-empty panel"><div class="welcome-icon"><ll-icon name="rocket_launch" size="lg"/></div>
-        <span class="eyebrow">COMIENZA AQUÍ</span><h2>Un sistema legacy. Un plan claro.</h2>
-        <p>Crea un proyecto para importar código, comprender sus dependencias y planificar una modernización segura.</p>
-        <button llButton variant="primary" type="button" (click)="vm.showCreate=true"><ll-icon name="add"/> Crear mi primer proyecto</button></div></ng-template>
-      <footer class="page-footer"><span>LEGACYLIFT AI · Sprint 5</span><span>Understand first. Modernize safely.</span></footer>
-    </main>
+      <section class="stage" role="tabpanel" [id]="'phase-'+vm.workspaceSection" [attr.aria-labelledby]="'tab-'+vm.workspaceSection" tabindex="-1">
+        <header class="stage-head">
+          <span class="stage-step">{{current.id==='evidence' ? 'Resultado final' : 'Paso '+stepNumber+' de '+totalStations}} · {{current.group}}</span>
+          <h2>{{current.title}}</h2>
+          <p>{{current.summary}}</p>
+          <p class="provenance" *ngIf="vm.provenance(current.id) as prov">
+            <ll-icon name="fingerprint" size="sm"/>
+            <span *ngIf="isDeterministic(prov.model)">Resultado de reglas deterministas locales, sin IA</span>
+            <span *ngIf="!isDeterministic(prov.model)">Resultado generado con <strong>{{providerName(prov.provider)}}</strong> · modelo {{prov.model}}<ng-container *ngIf="prov.template && prov.template.indexOf('sin prompt')<0"> · plantilla {{prov.template}}</ng-container></span>
+            <span class="fallback" *ngIf="prov.fallback">Motor real: {{prov.engine}}</span>
+          </p>
+        </header>
+
+        <ll-phase-actions/>
+
+        <div class="stage-body" [ngSwitch]="vm.workspaceSection">
+          <ng-container *ngSwitchCase="'source'"><ll-source-panel/></ng-container>
+          <ng-container *ngSwitchCase="'discover'"><ll-discover-overview/></ng-container>
+          <ng-container *ngSwitchCase="'understand'">
+            <ll-analysis-controls/>
+            <ll-review-queue *ngIf="vm.reviews.length"/>
+          </ng-container>
+          <ng-container *ngSwitchCase="'assess'"><ll-assessment-overview/></ng-container>
+          <ng-container *ngSwitchCase="'plan'">
+            <ll-migration-packs/>
+            <details class="panel editor-details disclosure" *ngIf="vm.blueprint">
+              <summary>Editar el Blueprint a mano</summary>
+              <ll-blueprint-editor/>
+            </details>
+          </ng-container>
+          <ng-container *ngSwitchCase="'baseline'"><ll-baseline-panel/></ng-container>
+          <ng-container *ngSwitchCase="'modernize'"><ll-migration-review/></ng-container>
+          <ng-container *ngSwitchCase="'verify'"><ll-verify-result/></ng-container>
+          <ng-container *ngSwitchCase="'evidence'"><ll-artifacts-panel/></ng-container>
+        </div>
+      </section>
+    </div>
+  </ng-container>
+
+  <ng-template #noProjectView>
+    <section class="loading-project" *ngIf="vm.loadingProject; else emptyState" role="status" aria-live="polite">
+      <ll-icon name="progress_activity" size="lg" class="spin"/>
+      <h2>Cargando proyecto…</h2>
+      <p>Obteniendo estado, archivos y resultados del servidor.</p>
+    </section>
+  </ng-template>
+  <ng-template #emptyState>
+    <section class="welcome">
+      <h1>Empieza por un proyecto</h1>
+      <p>Un proyecto agrupa el código de un sistema legacy y todo lo que LegacyLift aprende de él. Así es el recorrido:</p>
+      <ol class="welcome-route">
+        <li><strong>Entender</strong><span>Importa el código y obtén inventario, arquitectura y riesgos.</span></li>
+        <li><strong>Planificar</strong><span>Aprueba un plan por waves y registra el comportamiento actual.</span></li>
+        <li><strong>Modernizar</strong><span>Revisa el candidato generado sobre una copia y decide si lo aceptas.</span></li>
+        <li><strong>Entregar</strong><span>Descarga el código modernizado con su evidencia.</span></li>
+      </ol>
+      <button llButton variant="primary" type="button" (click)="vm.showCreate=true"><ll-icon name="add" size="sm"/> Crear mi primer proyecto</button>
+    </section>
+  </ng-template>
+</main>

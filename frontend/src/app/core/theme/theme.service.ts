@@ -22,7 +22,7 @@ export class ThemeService {
     this.current = theme;
     if (typeof document !== 'undefined') {
       document.documentElement.dataset['theme'] = theme;
-      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#0b0b0d' : '#f7f7f7');
+      document.querySelector('meta[name="theme-color"]')?.setAttribute('content', theme === 'dark' ? '#111214' : '#f3f4f6');
       document.getElementById('legacylift-favicon')?.setAttribute('href', `/branding/official/favicon-${theme}-32x32.png`);
     }
     if (persist) { try { localStorage.setItem(STORAGE_KEY, theme); } catch { /* unavailable */ } }

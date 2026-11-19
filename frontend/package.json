@@ -18,7 +18,9 @@
     "check:interactions": "node scripts/check-interactions.mjs",
     "check:sprint3": "node scripts/check-sprint3.mjs",
     "check:sprint4": "node scripts/check-sprint4.mjs",
-    "check:sprint5": "node scripts/check-sprint5.mjs"
+    "check:sprint5": "node scripts/check-sprint5.mjs",
+    "check:api-config": "node scripts/check-api-config.mjs",
+    "config:api": "node scripts/set-api-url.mjs"
   },
   "dependencies": {
     "@angular/common": "^22.2.0",
