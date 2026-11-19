@@ -59,9 +59,11 @@ def selected_diff(pid:str,aid:str) -> str:
     parts=[]
     for f in migration_review.summary(pid,aid)['files']:
         if not f['selected']:continue
-        name=f['path'];before=(original/name).read_text(encoding='utf-8',errors='replace').splitlines(keepends=True)
+        name=f['path'];is_new=not (original/name).exists()
+        before=[] if is_new else (original/name).read_text(encoding='utf-8',errors='replace').splitlines(keepends=True)
         after=(reviewed/name).read_text(encoding='utf-8',errors='replace').splitlines(keepends=True)
-        body=''.join(difflib.unified_diff(before,after,fromfile='a/'+name,tofile='b/'+name))
+        body=''.join(difflib.unified_diff(before,after,fromfile='/dev/null' if is_new else 'a/'+name,tofile='b/'+name))
+        if is_new:body='new file mode 100644\n'+body
         parts.append('diff --git a/'+name+' b/'+name+'\n'+body)
     return ''.join(parts)
 

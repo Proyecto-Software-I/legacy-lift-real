@@ -54,3 +54,6 @@
 .related .rule{font-weight:650;color:var(--color-text)}
 .related summary{font-size:12.5px}
 @media(max-width:760px){.architecture{grid-template-columns:1fr}}
+
+.auto-note{display:flex;flex-wrap:wrap;align-items:center;gap:6px;margin:0;font-size:12.5px;color:var(--color-text-secondary)}
+.auto-note.warn{color:var(--color-signal-text)}

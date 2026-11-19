@@ -8,7 +8,7 @@ from __future__ import annotations
 import json
 import re
 import hashlib
-from . import baseline,db,migration_review,migration_runs,workspace
+from . import baseline,cobol_java,db,migration_review,migration_runs,workspace
 
 
 def enqueue(pid: str) -> dict:
@@ -61,7 +61,7 @@ def test_coverage(folder, changed: list[str], test_files: list[str]) -> dict:
             'method':'Un archivo cuenta como cubierto si algún test lo importa o lo llama por nombre (análisis estático).'}
 
 
-def confidence(classification:str, pre:dict, post:dict, old:dict, new:dict, lint_before:dict, lint_after:dict, coverage:dict) -> tuple[int,list[dict]]:
+def confidence(classification:str, pre:dict, post:dict, old:dict, new:dict, lint_before:dict, lint_after:dict, coverage:dict, kind:str='tests') -> tuple[int,list[dict]]:
     """Orientative 0-100 score. Each factor states its points and evidence; no hidden weights."""
     factors=[]
     syntax_ok=int(pre.get('failed') or 0)==0 and int(post.get('failed') or 0)==0 and int(post.get('total') or 0)>0
@@ -79,7 +79,10 @@ def confidence(classification:str, pre:dict, post:dict, old:dict, new:dict, lint
         tests_points,detail=10,'Pruebas ejecutadas solo en uno de los dos lados'
     else:
         tests_points,detail=0,'Sin pruebas comparables ejecutadas' if classification!='divergent' else 'Las pruebas divergen o fallan'
-    factors.append({'id':'tests','label':'Pruebas comparables','points':tests_points,'max':50,'detail':detail})
+    if kind=='dual_run':
+        detail={'verified_within_tests':'Dual run: salida del Java idéntica a la del COBOL original',
+                'divergent':'Dual run: la salida del Java difiere o no compila'}.get(classification,'Sin ejecución de referencia del COBOL original')
+    factors.append({'id':'tests','label':'Dual run COBOL vs Java' if kind=='dual_run' else 'Pruebas comparables','points':tests_points,'max':50,'detail':detail})
     cov_points=round(20*float(coverage.get('ratio') or 0)) if tests_points else 0
     factors.append({'id':'coverage','label':'Cambios cubiertos por pruebas','points':cov_points,'max':20,
                     'detail':f"{coverage.get('covered_by_tests',0)} de {coverage.get('changed_files',0)} archivos modificados referenciados por tests"
@@ -89,6 +92,8 @@ def confidence(classification:str, pre:dict, post:dict, old:dict, new:dict, lint
 
 
 def comparison(before:dict,after:dict,coverage:dict|None=None) -> dict:
+    if before.get('dual_run') is not None or after.get('dual_run') is not None:
+        return _dual_comparison(before,after,coverage)
     old=before.get('tests',{}) or {};new=after.get('tests',{}) or {}
     pre=before.get('static_checks',{}) or {};post=after.get('static_checks',{}) or {}
     names_before=_names(old);names_after=_names(new)
@@ -120,6 +125,51 @@ def comparison(before:dict,after:dict,coverage:dict|None=None) -> dict:
             'limits':'No existe garantía de equivalencia funcional general, incluso con pruebas aprobadas.'}
 
 
+def _dual_comparison(before:dict,after:dict,coverage:dict|None) -> dict:
+    """cobol-to-java: compare the baseline COBOL execution with the candidate Java execution."""
+    pre=before.get('static_checks',{}) or {};post=after.get('static_checks',{}) or {}
+    ref=before.get('dual_run') or {};cand=after.get('dual_run') or {}
+    build=after.get('java_build') or {}
+    classification,reason,details=cobol_java.compare(ref,cand)
+    if build.get('status')=='failed':
+        classification,reason='divergent','El Java del candidato no compila.'
+    if int(pre.get('failed') or 0)>0 or int(post.get('failed') or 0)>0:
+        classification,reason='divergent','Falló una comprobación estructural del COBOL.'
+    coverage=coverage or {'changed_files':0,'covered_by_tests':0,'covered':[],'ratio':0.0}
+    score,factors=confidence(classification,pre,post,{},{},before.get('lint') or {},after.get('lint') or {},coverage,kind='dual_run')
+    factors=[f if f['id']!='build' else {**f,'label':'Build: COBOL estructural + javac','points':f['points'] if build.get('status')=='passed' else 0,
+             'detail':f"{f['detail']}; javac: {build.get('status','no ejecutado')}"} for f in factors]
+    factors=[f if f['id']!='coverage' else {**f,'label':'Código Java ejercitado por el dual run',
+             'detail':f"{coverage.get('covered_by_tests',0)} de {coverage.get('changed_files',0)} archivos Java compilados y ejecutados desde el programa principal"} for f in factors]
+    score=0 if classification=='divergent' else sum(f['points'] for f in factors)
+    programs=sorted((ref.get('cobol') or {}).get('runs',{}))
+    return {'classification':classification,'outcome':OUTCOME[classification],'reason':reason,
+            'evidence_kind':'dual_run','dual_run':{'reference':ref.get('cobol'),'candidate':cand.get('java'),'comparison':details,
+                                                   'image':cand.get('image') or ref.get('image')},
+            'before':{'status':(ref.get('cobol') or {}).get('status','not_run'),'reason':ref.get('reason') or (ref.get('cobol') or {}).get('reason'),
+                      'output':'\n'.join(f"{p}: {r['stdout'].rstrip()}" for p,r in ((ref.get('cobol') or {}).get('runs') or {}).items()),
+                      'worker':ref.get('worker'),'image':ref.get('image'),'network':ref.get('network')},
+            'after':{'status':(cand.get('java') or {}).get('status','not_run'),'reason':cand.get('reason') or (cand.get('java') or {}).get('reason'),
+                     'output':'\n'.join(f"{p}: {r['stdout'].rstrip()}" for p,r in ((cand.get('java') or {}).get('runs') or {}).items()) or str(build.get('output') or '')[-3000:],
+                     'worker':cand.get('worker'),'image':cand.get('image'),'network':cand.get('network')},
+            'static_before':pre,'static_after':post,'java_build':build,
+            'lint_before':{},'lint_after':{},'test_names_before':programs,'test_names_after':sorted((cand.get('java') or {}).get('runs',{})),
+            'confidence_score':score,'confidence_factors':factors,'coverage':coverage,
+            'confidence_note':'Score orientativo: resume la evidencia ejecutada, no demuestra equivalencia.',
+            'limits':'El dual run solo demuestra el escenario ejecutado (mismas entradas embebidas); no garantiza equivalencia para otras entradas.'}
+
+
+def _hardcoded_output(folder, reference:dict) -> list[str]:
+    """Expected output lines that appear verbatim in the Java sources (computed results must not be literals)."""
+    sources='\n'.join(p.read_text(encoding='utf-8',errors='replace') for p in cobol_java.java_files(folder))
+    hits=[]
+    for run in ((reference or {}).get('cobol') or {}).get('runs',{}).values():
+        for line in run['stdout'].splitlines():
+            line=line.rstrip()
+            if len(line.strip())>=12 and line in sources:hits.append(line)
+    return hits
+
+
 def run_one() -> dict | None:
     with db.connect() as conn:
         conn.execute('BEGIN IMMEDIATE')
@@ -138,7 +188,23 @@ def run_one() -> dict | None:
         current=baseline.capture(pid,folder)
         changed=[f['path'] for f in migration_review.summary(pid,aid)['files'] if f['selected']]
         tests=[t['path'] for t in (recorded['data'].get('test_inventory') or [])]
-        result=comparison(recorded['data'],current,test_coverage(folder,changed,tests))
+        if recorded['data'].get('dual_run') is not None:
+            java_ok=((current.get('dual_run') or {}).get('java') or {}).get('status')=='passed'
+            coverage={'changed_files':len(changed),'covered_by_tests':len(changed) if java_ok else 0,
+                      'covered':changed if java_ok else [],'ratio':1.0 if java_ok and changed else 0.0,
+                      'method':'Dual run: las clases Java se compilan juntas y se ejecutan desde el programa principal.'}
+            result=comparison(recorded['data'],current,coverage)
+            hits=_hardcoded_output(folder,recorded['data'].get('dual_run'))
+            if hits and result['classification']=='verified_within_tests':
+                result.update({'classification':'not_demonstrated','outcome':'sin_evidencia',
+                               'reason':'La salida esperada aparece como texto literal en el Java; la coincidencia no demuestra que se calcule.',
+                               'hardcoded_lines':hits[:5]})
+                for factor in result['confidence_factors']:
+                    if factor['id'] in ('tests','coverage'):
+                        factor['points']=0;factor['detail']='No cuenta: la salida esperada está escrita como literal en el Java'
+                result['confidence_score']=sum(f['points'] for f in result['confidence_factors'])
+        else:
+            result=comparison(recorded['data'],current,test_coverage(folder,changed,tests))
         result.update({'attempt_id':aid,'snapshot_id':item['snapshot_id'],'blueprint_id':item['blueprint_id'],
                        'wave_id':item['wave_id'],'reviewed_sha256':digest,'candidate_sha256':item['candidate_sha256'],
                        'files_selected':migration_review.summary(pid,aid)['selected_count']})

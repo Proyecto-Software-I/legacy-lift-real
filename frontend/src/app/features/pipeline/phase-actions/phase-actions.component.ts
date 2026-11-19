@@ -88,10 +88,11 @@ export class PhaseActionsComponent {
       const executable = waves.filter(w => vm.packMatch(w).compatible);
       const fixable = waves.find(w => vm.strategyFix(w));
       if (!executable.length && fixable) {
-        const fix = vm.strategyFix(fixable)!;
+        const [first, second] = vm.strategyOptions(fixable);
         return g('action', `La wave ${fixable.id} no se puede ejecutar todavía`,
-          `Su estrategia «${fixable.strategy}» no tiene un Migration Pack disponible. Cámbiala a «${fix}» para continuar; se guardará una nueva revisión del plan.`,
-          {primary: {kind:'fixStrategy', label:`Cambiar a ${fix}`, icon:'build', arg: fixable.id, arg2: fix, disabled: vm.blueprintSaving}});
+          `Su estrategia «${fixable.strategy}» no tiene un Migration Pack disponible. Elige cómo continuar; se guardará una nueva revisión del plan.`,
+          {primary: {kind:'fixStrategy', label:vm.strategyLabel(first), icon:'build', arg: fixable.id, arg2: first, disabled: vm.blueprintSaving},
+           secondary: second ? {kind:'fixStrategy', label:vm.strategyLabel(second), icon:'build', arg: fixable.id, arg2: second, disabled: vm.blueprintSaving} : undefined});
       }
       if (!executable.length) return g('blocked', 'Ninguna wave es ejecutable',
         'Ningún Migration Pack disponible admite estas waves. Edita el Blueprint (lenguaje, estrategia o archivos) y guarda una nueva revisión.');
@@ -101,7 +102,17 @@ export class PhaseActionsComponent {
         'Revisa las waves propuestas abajo. Al aprobar, podrás elegir qué wave ejecutar.',
         {primary: {kind:'approvePlan', label:'Aprobar Blueprint', icon:'check'}, rerun: true});
       if (!p.active_wave_id) {
-        const pending = executable.find(w => vm.blueprint!.wave_approvals[w.id] !== 'rejected') || executable[0];
+        const approvals = vm.blueprint.wave_approvals;
+        // Prefer waves whose result Verify can actually demonstrate (dual run entry point).
+        const ranked = [...executable].sort((a, b) => Number(!!b.dual_run_entry?.length) - Number(!!a.dual_run_entry?.length));
+        const pending = ranked.find(w => approvals[w.id] !== 'rejected') || ranked[0];
+        // A prerequisite still waiting for approval must be handled first (Keep waves are acknowledgements).
+        const blocker = pending.depends_on.map(id => waves.find(w => w.id === id)).find(w => w && approvals[w.id] !== 'approved');
+        if (blocker) {
+          return g('action', `Primero confirma la wave ${blocker.id}`,
+            `${pending.id} depende de ${blocker.id} (${blocker.strategy}). ${blocker.strategy === 'Keep' ? 'Keep no cambia código: confirmarla solo registra la decisión.' : 'Apruébala o edita las dependencias del Blueprint.'}`,
+            {primary: {kind:'approveWave', label:`Confirmar ${blocker.id}`, icon:'check', arg: blocker.id}});
+        }
         return g('action', 'Aprueba la wave que quieres ejecutar',
           `${pending.id}: ${pending.goal}. Solo se modifica una wave por vez.`,
           {primary: {kind:'approveWave', label:`Aprobar ${pending.id}`, icon:'check', arg: pending.id}});
@@ -118,7 +129,7 @@ export class PhaseActionsComponent {
       const v = migration!.verification!;
       const score = v.confidence_score != null ? ` Confidence Score orientativo: ${v.confidence_score}/100.` : '';
       return g('action', 'Decide si aceptas el resultado', v.classification === 'verified_within_tests'
-        ? `Las pruebas equivalentes pasaron antes y después.${score} Confirma la aprobación para habilitar los entregables.`
+        ? `${v.evidence_kind === 'dual_run' ? 'El dual run dio la misma salida en COBOL y en Java.' : 'Las pruebas equivalentes pasaron antes y después.'}${score} Confirma la aprobación para habilitar los entregables.`
         : `No hay evidencia suficiente para demostrar equivalencia.${score} Puedes aprobar justificando el riesgo, o rechazar el intento.`,
         {primary: {kind:'decide', label:'Ir a la decisión', icon:'arrow_downward'}});
     }

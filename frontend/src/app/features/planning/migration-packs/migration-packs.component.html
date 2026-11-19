@@ -44,6 +44,12 @@
         <div *ngIf="wave.depends_on.length"><dt>Depende de</dt><dd>{{wave.depends_on.join(', ')}}</dd></div>
         <div><dt>Criterio de aceptación</dt><dd>{{wave.acceptance_criteria}}</dd></div>
       </dl>
+      <p class="auto-note warn" *ngIf="wave.strategy==='LanguageMigration' && wave.dual_run_entry && !wave.dual_run_entry.length"><ll-icon name="warning" size="sm"/>
+        Esta wave solo tiene subprogramas: se podrá traducir, pero Verify no tendrá un programa principal que ejecutar para el dual run.</p>
+      <p class="auto-note" *ngIf="wave.strategy==='LanguageMigration' && wave.dual_run_entry?.length"><ll-icon name="play_circle" size="sm"/>
+        Dual run desde: <code *ngFor="let e of wave.dual_run_entry">{{e}}</code></p>
+      <p class="auto-note" *ngIf="wave.auto_included?.length"><ll-icon name="link" size="sm"/>
+        Se incluyeron automáticamente los subprogramas que llama: <code *ngFor="let f of wave.auto_included">{{f}}</code></p>
       <details class="disclosure related" *ngIf="wave.related_findings?.length">
         <summary>Hallazgos vinculados ({{wave.related_findings!.length}})</summary>
         <ul><li *ngFor="let f of wave.related_findings"><span class="rule">{{f.rule}}</span> {{f.reason}}
@@ -51,11 +57,16 @@
       </details>
       <p class="compat" [class.ok]="vm.packMatch(wave).compatible"><ll-icon [name]="vm.packMatch(wave).compatible?'check_circle':'block'" size="sm"/>
         <span *ngIf="vm.packMatch(wave).compatible">Se ejecutará con <strong>{{vm.packMatch(wave).name}}</strong>.</span>
-        <span *ngIf="!vm.packMatch(wave).compatible">No ejecutable: {{vm.packMatch(wave).reason}}<ng-container *ngIf="vm.strategyFix(wave) as fix"> El pack disponible admite «{{fix}}».</ng-container></span>
+        <span *ngIf="!vm.packMatch(wave).compatible">No ejecutable: {{vm.packMatch(wave).reason}}<ng-container *ngIf="vm.strategyOptions(wave).length"> Puedes cambiar la estrategia abajo.</ng-container></span>
       </p>
       <div class="actions">
-        <button *ngIf="vm.strategyFix(wave) as fix" llButton variant="secondary" size="sm" type="button" (click)="vm.adoptStrategy(wave.id, fix)" [disabled]="vm.blueprintSaving || vm.isAnyRunning">
-          <ll-icon name="build" size="sm"/> Usar {{fix}} en esta wave</button>
+        <button *ngFor="let option of vm.strategyOptions(wave)" llButton variant="secondary" size="sm" type="button" (click)="vm.adoptStrategy(wave.id, option)"
+          [disabled]="vm.blueprintSaving || vm.isAnyRunning || vm.selected.active_wave_id===wave.id"
+          [title]="'Guarda una nueva revisión con la estrategia '+option">
+          <ll-icon [name]="option==='LanguageMigration' ? 'translate' : 'build'" size="sm"/> {{vm.strategyLabel(option)}}</button>
+        <button *ngIf="plan.status==='approved' && wave.strategy==='Keep' && plan.wave_approvals[wave.id]!=='approved'" llButton variant="secondary" size="sm" type="button"
+          [disabled]="vm.isAnyRunning" (click)="vm.waveDecision(wave.id,true)" title="Keep no ejecuta cambios: confirma la decisión y desbloquea las waves que dependen de esta">
+          <ll-icon name="check" size="sm"/> Confirmar sin cambios</button>
         <ng-container *ngIf="plan.status==='approved' && vm.packMatch(wave).compatible && vm.selected.active_wave_id!==wave.id">
           <button *ngIf="plan.wave_approvals[wave.id]!=='approved'" llButton variant="secondary" size="sm" type="button" [disabled]="vm.isAnyRunning" (click)="vm.waveDecision(wave.id,true)">
             <ll-icon name="check" size="sm"/> Aprobar esta wave</button>

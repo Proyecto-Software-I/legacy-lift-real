@@ -21,7 +21,16 @@ primitivas visuales de tipo shadcn/ui (Card, Button, Badge, Dialog, Progress, Ta
 
 **Importante:** hay una diferencia entre tener el *flujo implementado* y tener una garantía de modernización segura.
 La versión académica no asegura equivalencia sin tests comparables, ni admite todas las tecnologías.
-Solo el pack `safe-refactor@1.0` admite cambios limitados dentro del lenguaje existente.
+Hay dos Migration Packs ejecutables:
+
+- `safe-refactor@1.0`: cambios limitados dentro del lenguaje existente (Python, JS/TS, Java, C#, Go, COBOL).
+- `cobol-to-java@1.0`: traduce programas COBOL a **Java 17** con IA (Codex, Gemini o Claude; no en modo demo).
+  El COBOL original se conserva; el Java debe compilar (`javac -proc:none`) y Verify hace un **dual run**:
+  ejecuta el COBOL original (GnuCOBOL) y el Java en un contenedor sin red y compara su salida. Si la salida
+  esperada aparece escrita literalmente en el Java, no cuenta como evidencia. Requiere `LEGACYLIFT_WORKER_MODE=docker-local`,
+  autorizar la ejecución en Baseline y construir una vez la imagen del runner:
+  `docker build -t legacylift/legacy-runner:1 docker/legacy-runner`.
+  Para usarlo, en Plan elige «Migrar COBOL a Java» para la wave con los programas `.cbl`.
 
 ## Requisitos
 
