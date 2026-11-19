@@ -230,6 +230,10 @@ export class WorkspaceFacade {
   private readonly _reviewDraft = signal<Record<string,string>>({});
   get reviewDraft(): Record<string,string> { return this._reviewDraft(); }
   set reviewDraft(value: Record<string,string>) { this._reviewDraft.set(value); }
+  private readonly _savingReviewIds = signal<Set<string>>(new Set());
+  private readonly _savedReviewId = signal<string>('');
+  isReviewSaving(id: string): boolean { return this._savingReviewIds().has(id); }
+  isReviewSaved(id: string): boolean { return this._savedReviewId() === id; }
   private readonly _analysisBusy = signal<boolean>(false);
   get analysisBusy(): boolean { return this._analysisBusy(); }
   set analysisBusy(value: boolean) { this._analysisBusy.set(value); }
@@ -754,11 +758,29 @@ export class WorkspaceFacade {
   }
   setReviewDraft(id:string, comment:string):void { this.reviewDraft={...this.reviewDraft,[id]:comment}; }
   updateReview(row:ReviewItem,status:'pending'|'confirmed'|'discarded'):void {
-    if(!this.selected)return;
+    if(!this.selected || this.isReviewSaving(row.id))return;
     const pid=this.selected.id;
-    this.api.reviewItem(pid,row.id,status,this.reviewDraft[row.id]||'').subscribe({next:()=>{
-      this.loadReviews(pid);this.toast('Revisión guardada en el snapshot activo.');
-    },error:e=>this.showError(e)});
+    const prevStatus=row.status;
+    const prevComment=row.comment;
+    const nextComment=this.reviewDraft[row.id]||'';
+    const nextSaving=new Set(this._savingReviewIds());
+    nextSaving.add(row.id);
+    this._savingReviewIds.set(nextSaving);
+    this.reviews=this.reviews.map(r=>r.id===row.id?{...r,status,comment:nextComment}:r);
+    this.api.reviewItem(pid,row.id,status,nextComment).subscribe({next:()=>{
+      const done=new Set(this._savingReviewIds());
+      done.delete(row.id);
+      this._savingReviewIds.set(done);
+      this._savedReviewId.set(row.id);
+      setTimeout(()=>{if(this._savedReviewId()===row.id)this._savedReviewId.set('');},2500);
+      this.toast('Revisión guardada en el snapshot activo.');
+    },error:e=>{
+      const done=new Set(this._savingReviewIds());
+      done.delete(row.id);
+      this._savingReviewIds.set(done);
+      this.reviews=this.reviews.map(r=>r.id===row.id?{...r,status:prevStatus,comment:prevComment}:r);
+      this.showError(e);
+    }});
   }
   loadDiscover(pid: string): void {
     this.api.discover(pid).subscribe({next: r=>{

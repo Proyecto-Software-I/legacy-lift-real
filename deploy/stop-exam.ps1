@@ -16,8 +16,8 @@ if ($caddy) {
 }
 
 # 3. Detener FastAPI y el contenedor migration-worker en WSL2 Ubuntu-24.04
-Write-Host "2. Deteniendo FastAPI (legacylift-api) y contenedor migration-worker en WSL2..."
-wsl.exe -d Ubuntu-24.04 -u root -- bash -c "systemctl stop legacylift-api 2>/dev/null || true; cd /mnt/f/Docs/uni/proyecto/legacy-lift-real && docker compose -f compose.migration-worker.yml down 2>/dev/null || true"
+Write-Host "2. Deteniendo FastAPI (legacylift-api) y worker (legacylift-worker) en WSL2..."
+wsl.exe -d Ubuntu-24.04 -u root -- bash -c "systemctl stop legacylift-worker 2>/dev/null || true; systemctl stop legacylift-api 2>/dev/null || true; cd /mnt/f/Docs/uni/proyecto/legacy-lift-real && docker compose -f compose.migration-worker.yml down 2>/dev/null || true"
 
 # 4. Terminar procesos holder de WSL2 y apagar la distro
 Get-CimInstance Win32_Process -Filter "Name='wsl.exe'" -ErrorAction SilentlyContinue | Where-Object { $_.CommandLine -match 'sleep infinity' } | ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }

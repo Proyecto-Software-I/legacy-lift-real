@@ -34,8 +34,8 @@ if (-not $wslHolder) {
 }
 
 # 3. Asegurar que WSL2 Ubuntu-24.04, Docker, migration-worker y legacylift-api estén activos
-Write-Step "2b. Verificando servicios en WSL2 Ubuntu-24.04 (Docker + migration-worker + FastAPI)..."
-wsl.exe -d Ubuntu-24.04 -u root -- bash -c "systemctl stop caddy 2>/dev/null || true; systemctl disable caddy 2>/dev/null || true; systemctl start docker && systemctl start legacylift-api && cd /mnt/f/Docs/uni/proyecto/legacy-lift-real && docker compose -f compose.migration-worker.yml up -d" | Out-Null
+Write-Step "2b. Verificando servicios en WSL2 Ubuntu-24.04 (Docker + legacylift-worker + FastAPI)..."
+wsl.exe -d Ubuntu-24.04 -u root -- bash -c "systemctl stop caddy 2>/dev/null || true; systemctl disable caddy 2>/dev/null || true; cd /mnt/f/Docs/uni/proyecto/legacy-lift-real && docker compose -f compose.migration-worker.yml down 2>/dev/null || true; systemctl start docker && systemctl start legacylift-api && systemctl start legacylift-worker" | Out-Null
 
 # 4. Lanzar Caddy desde el Programador de Tareas de Windows (svchost.exe) para que NUNCA muera al cerrar la ventana del script
 $caddyProc = Get-Process -Name "caddy" -ErrorAction SilentlyContinue

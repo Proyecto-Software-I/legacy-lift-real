@@ -13,9 +13,20 @@
     <p class="evidence" *ngIf="item.evidence?.references?.length">Evidencia citada por la IA: <span class="mono" *ngFor="let e of item.evidence.references">{{e.file}}:{{e.line || '?'}} </span></p>
     <label class="sr-only" [for]="'review-'+item.id">Comentario de revisión</label>
     <textarea class="input review-comment" [id]="'review-'+item.id" rows="2" [ngModel]="vm.reviewDraft[item.id]||''" (ngModelChange)="vm.setReviewDraft(item.id, $event)" placeholder="Comentario opcional"></textarea>
-    <div class="review-actions"><button llButton variant="secondary" size="sm" type="button" (click)="vm.updateReview(item,'confirmed')"><ll-icon name="check" size="sm"/> Confirmar</button>
-      <button llButton variant="secondary" size="sm" type="button" (click)="vm.updateReview(item,'discarded')"><ll-icon name="close" size="sm"/> Descartar</button>
-      <button *ngIf="item.status!=='pending'" llButton variant="ghost" size="sm" type="button" (click)="vm.updateReview(item,'pending')">Marcar pendiente</button></div>
+    <div class="review-actions">
+      <button llButton [variant]="item.status==='confirmed'?'primary':'secondary'" size="sm" type="button"
+        [disabled]="vm.isReviewSaving(item.id) || item.status==='confirmed'" (click)="vm.updateReview(item,'confirmed')">
+        <ll-icon name="check" size="sm"/> {{item.status==='confirmed'?'Confirmado':'Confirmar'}}
+      </button>
+      <button llButton [variant]="item.status==='discarded'?'primary':'secondary'" size="sm" type="button"
+        [disabled]="vm.isReviewSaving(item.id) || item.status==='discarded'" (click)="vm.updateReview(item,'discarded')">
+        <ll-icon name="close" size="sm"/> {{item.status==='discarded'?'Descartado':'Descartar'}}
+      </button>
+      <button *ngIf="item.status!=='pending'" llButton variant="ghost" size="sm" type="button"
+        [disabled]="vm.isReviewSaving(item.id)" (click)="vm.updateReview(item,'pending')">Marcar pendiente</button>
+      <span class="review-feedback" *ngIf="vm.isReviewSaving(item.id)">Guardando…</span>
+      <span class="review-feedback saved" *ngIf="!vm.isReviewSaving(item.id) && vm.isReviewSaved(item.id)">✓ Guardado</span>
+    </div>
   </article></div>
   <p class="no-reviews" *ngIf="!vm.filteredReviews.length">Ningún hallazgo coincide con este filtro.</p>
   <p class="review-footer" *ngIf="vm.reviews.length>70">Se muestran hasta 70 hallazgos. Usa la búsqueda para encontrar otros.</p>
