@@ -1,32 +1,30 @@
 <section class="panel planning-panel" *ngIf="vm.selected && vm.blueprint as plan" aria-label="Blueprint de modernización">
-  <ll-section-heading eyebrow="SPRINT 3 / PLAN" title="Modernization Blueprint"
-    description="Plan versionado y editable. Ninguna wave se ejecuta sin aprobación y pack compatible."/>
-  <div class="planning-meta"><ll-status-badge [status]="plan.status"/><span>Revisión {{plan.revision}}</span><span>Snapshot {{plan.snapshot_id.slice(0,10)}}</span></div>
+  <p class="planning-warning"><ll-icon name="info" size="sm"/> Al guardar se crea la revisión {{plan.revision + 1}} y tendrás que aprobar de nuevo el Blueprint y la wave.</p>
   <ng-container *ngIf="draft as b">
-    <label class="field"><span>Título</span><input [ngModel]="b.title" (ngModelChange)="changeText('title',$event)" maxlength="140"/></label>
-    <label class="field"><span>Arquitectura objetivo</span><textarea rows="3" [ngModel]="b.target_architecture" (ngModelChange)="changeText('target_architecture',$event)"></textarea></label>
-    <div class="waves-heading"><h3>Migration Waves</h3><small>{{b.waves.length}} waves · máximo cinco archivos por wave</small></div>
+    <label class="field"><span>Título</span><input class="input" [ngModel]="b.title" (ngModelChange)="changeText('title',$event)" maxlength="140"/></label>
+    <label class="field"><span>Arquitectura actual</span><textarea class="input" rows="3" [ngModel]="b.current_architecture" (ngModelChange)="changeText('current_architecture',$event)"></textarea></label>
+    <label class="field"><span>Arquitectura objetivo</span><textarea class="input" rows="3" [ngModel]="b.target_architecture" (ngModelChange)="changeText('target_architecture',$event)"></textarea></label>
+    <div class="waves-heading"><h3>Waves</h3><small>Máximo cinco archivos por wave</small></div>
     <div class="waves-grid">
       <article class="wave-card" *ngFor="let wave of b.waves;let i=index">
         <div class="wave-head"><strong>{{wave.id}}</strong><span>Prioridad {{wave.priority}}</span></div>
-        <label class="field"><span>Objetivo</span><input [ngModel]="wave.goal" (ngModelChange)="changeWave(i,'goal',$event)"/></label>
+        <label class="field"><span>Objetivo</span><input class="input" [ngModel]="wave.goal" (ngModelChange)="changeWave(i,'goal',$event)"/></label>
         <div class="inline-fields">
-          <label class="field"><span>Estrategia propuesta</span><select [ngModel]="wave.strategy" (ngModelChange)="changeStrategy(i,$event)">
-            <option *ngFor="let s of ['Keep','Stabilize','Encapsulate','Refactor','Rewrite','LanguageMigration']" [value]="s">{{s}}</option>
+          <label class="field"><span>Estrategia propuesta</span><select class="input" [ngModel]="wave.strategy" (ngModelChange)="changeStrategy(i,$event)">
+            <option *ngFor="let s of strategies" [value]="s">{{s}}{{s==='Refactor' ? ' (ejecutable)' : ''}}</option>
           </select></label>
-          <label class="field"><span>Prioridad</span><select [ngModel]="wave.priority" (ngModelChange)="changePriority(i,$event)">
+          <label class="field"><span>Prioridad</span><select class="input" [ngModel]="wave.priority" (ngModelChange)="changePriority(i,$event)">
             <option value="1">Alta</option><option value="2">Media</option><option value="3">Baja</option>
           </select></label>
         </div>
-        <p class="caption">Archivos del snapshot</p><ul><li *ngFor="let path of wave.files"><code>{{path}}</code></li></ul>
+        <p class="caption">Archivos: <code *ngFor="let path of wave.files">{{path}} </code></p>
         <p class="caption">Depende de: {{wave.depends_on.join(', ') || 'ninguna'}}</p>
-        <label class="field"><span>Riesgo</span><textarea rows="2" [ngModel]="wave.risk" (ngModelChange)="changeWave(i,'risk',$event)"></textarea></label>
-        <label class="field"><span>Criterio de aceptación</span><textarea rows="2" [ngModel]="wave.acceptance_criteria" (ngModelChange)="changeWave(i,'acceptance_criteria',$event)"></textarea></label>
+        <label class="field"><span>Riesgo</span><textarea class="input" rows="2" [ngModel]="wave.risk" (ngModelChange)="changeWave(i,'risk',$event)"></textarea></label>
+        <label class="field"><span>Criterio de aceptación</span><textarea class="input" rows="2" [ngModel]="wave.acceptance_criteria" (ngModelChange)="changeWave(i,'acceptance_criteria',$event)"></textarea></label>
       </article>
     </div>
-    <p class="planning-warning"><ll-icon name="info" size="sm"/> Los cambios crean una nueva revisión; las revisiones aprobadas son inmutables.</p>
-    <button llButton variant="primary" type="button" (click)="vm.saveBlueprint()" [disabled]="vm.blueprintSaving || vm.isAnyRunning">
-      <ll-icon name="save" size="sm"/> {{vm.blueprintSaving?'Guardando...':'Guardar nueva revisión'}}
+    <button llButton variant="secondary" type="button" class="save" (click)="vm.saveBlueprint()" [disabled]="vm.blueprintSaving || vm.isAnyRunning">
+      <ll-icon name="save" size="sm"/> {{vm.blueprintSaving?'Guardando…':'Guardar nueva revisión'}}
     </button>
   </ng-container>
 </section>

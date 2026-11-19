@@ -1,22 +1,22 @@
-<section class="panel review-panel" *ngIf="vm.hasSource" aria-label="Revisión humana de hallazgos">
-  <ll-section-heading eyebrow="REVISIÓN HUMANA" title="Hallazgos por revisar"
-    description="Los hallazgos estáticos no son vulnerabilidades confirmadas; las reglas de IA son hipótesis. Conserva tus decisiones por snapshot." />
+<details class="panel review-panel disclosure" *ngIf="vm.hasSource" [open]="pendingCount > 0 && pendingCount <= 5">
+  <summary>Hallazgos por revisar <span class="count">{{pendingCount}} {{pendingCount===1?'pendiente':'pendientes'}} de {{vm.reviews.length}}</span></summary>
+  <p class="review-intro">Las señales estáticas no son vulnerabilidades confirmadas y las reglas de IA son hipótesis. Tu decisión queda guardada para este snapshot. Revisarlas es opcional.</p>
   <div class="review-toolbar">
-    <label class="sr-only" for="review-search">Buscar hallazgos</label><input class="input" id="review-search" placeholder="Buscar hallazgo o archivo…" [(ngModel)]="vm.reviewQuery"/>
-    <label class="sr-only" for="review-filter">Estado</label><select class="input" id="review-filter" [(ngModel)]="vm.reviewFilter">
+    <label class="sr-only" for="review-search">Buscar hallazgos</label><input class="input" id="review-search" placeholder="Buscar por texto o archivo" [(ngModel)]="vm.reviewQuery"/>
+    <label class="sr-only" for="review-filter">Filtrar por estado</label><select class="input" id="review-filter" [(ngModel)]="vm.reviewFilter">
       <option value="all">Todos</option><option value="pending">Pendientes</option><option value="confirmed">Confirmados</option><option value="discarded">Descartados</option></select>
   </div>
-  <div class="review-list"><article class="review-item" *ngFor="let item of vm.filteredReviews">
-    <div class="review-item-top"><span class="review-phase">{{item.phase | uppercase}}</span><span class="review-status" [class]="item.status">{{item.status==='pending'?'Pendiente':item.status==='confirmed'?'Confirmado':'Descartado'}}</span></div>
+  <div class="review-list"><article class="review-item" *ngFor="let item of vm.filteredReviews" [attr.data-status]="item.status">
+    <div class="review-item-top"><span class="review-phase">{{phaseLabel(item.phase)}}</span><span class="review-status" [class]="'review-status '+item.status">{{item.status==='pending'?'Pendiente':item.status==='confirmed'?'Confirmado':'Descartado'}}</span></div>
     <strong>{{item.title}}</strong>
-    <p class="evidence" *ngIf="item.evidence?.file">{{item.evidence.file}}{{item.evidence.line?':'+item.evidence.line:''}} <span *ngIf="item.evidence.excerpt">· {{item.evidence.excerpt}}</span></p>
-    <p class="evidence" *ngIf="item.evidence?.references?.length">Evidencia de IA: <span *ngFor="let e of item.evidence.references">{{e.file}}:{{e.line || '?'}} </span></p>
+    <p class="evidence" *ngIf="item.evidence?.file"><span class="mono">{{item.evidence.file}}{{item.evidence.line?':'+item.evidence.line:''}}</span> <span *ngIf="item.evidence.excerpt">— {{item.evidence.excerpt}}</span></p>
+    <p class="evidence" *ngIf="item.evidence?.references?.length">Evidencia citada por la IA: <span class="mono" *ngFor="let e of item.evidence.references">{{e.file}}:{{e.line || '?'}} </span></p>
     <label class="sr-only" [for]="'review-'+item.id">Comentario de revisión</label>
-    <textarea class="input review-comment" [id]="'review-'+item.id" rows="2" [ngModel]="vm.reviewDraft[item.id]||''" (ngModelChange)="vm.setReviewDraft(item.id, $event)" placeholder="Comentario opcional sobre esta decisión"></textarea>
+    <textarea class="input review-comment" [id]="'review-'+item.id" rows="2" [ngModel]="vm.reviewDraft[item.id]||''" (ngModelChange)="vm.setReviewDraft(item.id, $event)" placeholder="Comentario opcional"></textarea>
     <div class="review-actions"><button llButton variant="secondary" size="sm" type="button" (click)="vm.updateReview(item,'confirmed')"><ll-icon name="check" size="sm"/> Confirmar</button>
       <button llButton variant="secondary" size="sm" type="button" (click)="vm.updateReview(item,'discarded')"><ll-icon name="close" size="sm"/> Descartar</button>
-      <button llButton variant="ghost" size="sm" type="button" (click)="vm.updateReview(item,'pending')">Pendiente</button></div>
+      <button *ngIf="item.status!=='pending'" llButton variant="ghost" size="sm" type="button" (click)="vm.updateReview(item,'pending')">Marcar pendiente</button></div>
   </article></div>
-  <p class="no-reviews" *ngIf="!vm.filteredReviews.length">No hay hallazgos con este filtro. Se incorporan durante Discover, Understand y Assess.</p>
-  <p class="review-footer" *ngIf="vm.reviews.length>70">Se muestran hasta 70 hallazgos por filtro. Usa la búsqueda para localizar otros.</p>
-</section>
+  <p class="no-reviews" *ngIf="!vm.filteredReviews.length">Ningún hallazgo coincide con este filtro.</p>
+  <p class="review-footer" *ngIf="vm.reviews.length>70">Se muestran hasta 70 hallazgos. Usa la búsqueda para encontrar otros.</p>
+</details>

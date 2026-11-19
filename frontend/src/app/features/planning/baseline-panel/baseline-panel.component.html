@@ -1,41 +1,58 @@
 <section class="panel baseline-panel" aria-label="Preparación del baseline" *ngIf="vm.selected as project">
-  <ll-section-heading eyebrow="SPRINT 3 / BASELINE" title="Evidencia de comportamiento"
-    description="Detecta pruebas, registra el estado original y opcionalmente ejecuta una suite autorizada."/>
-  <div class="baseline-alert"><ll-icon name="shield" size="lg"/><p>Por defecto solo se comprueban sintaxis y estructuras. El código importado nunca se ejecuta por seleccionar un proyecto o generar un plan.</p></div>
   <ng-container *ngIf="vm.baselinePreflight as info;else noApproval">
-    <p class="caption" *ngIf="!info.ready">Aprueba primero el Blueprint y una wave compatible con un Migration Pack.</p>
+    <p class="caption" *ngIf="!info.ready">Aprueba primero el Blueprint y una wave compatible en el paso Plan.</p>
     <ng-container *ngIf="info.ready">
-      <div class="baseline-stats"><div><small>Pruebas detectadas</small><strong>{{info.tests.length}}</strong></div>
-        <div><small>Worker</small><strong>{{info.worker_mode}}</strong></div>
-        <div><small>Consentimiento</small><ll-status-badge [status]="info.execution_authorized?'approved':'pending'"/></div></div>
-      <div class="test-list"><h3>Suites encontradas</h3><ul *ngIf="info.tests.length;else noTests">
-        <li *ngFor="let test of info.tests"><code>{{test.path}}</code><span>{{test.framework}}</span></li></ul>
-        <ng-template #noTests><p class="caption">Ninguna suite soportada detectada. No se afirma equivalencia.</p></ng-template></div>
-      <div class="consent-row"><label class="consent-label"><input type="checkbox" [checked]="info.execution_authorized"
-        [disabled]="vm.baselineBusy || vm.isAnyRunning" (change)="vm.authorizeExecution($any($event.target).checked)"/>
-        <strong>Autorizo la ejecución de pruebas del repositorio en un worker aislado para esta wave y snapshot.</strong></label>
-        <p class="caption">Marca esta casilla antes de ejecutar Baseline para que Docker corra las pruebas y Verify valide la equivalencia automáticamente.</p></div>
+      <div class="baseline-intro"><ll-icon name="shield"/>
+        <p>Por defecto solo se comprueba la sintaxis y la estructura. El código importado no se ejecuta salvo que lo autorices aquí.</p></div>
+
+      <div class="baseline-stats">
+        <div><small>Pruebas encontradas</small><strong>{{info.tests.length}}</strong></div>
+        <div><small>Entorno de ejecución</small><strong>{{workerLabel(info.worker_mode)}}</strong></div>
+        <div><small>Ejecución de pruebas</small><strong>{{info.execution_authorized ? 'Autorizada' : 'No autorizada'}}</strong></div>
+      </div>
+
+      <div class="consent-row" [class.on]="info.execution_authorized">
+        <label class="check-row"><input type="checkbox" [checked]="info.execution_authorized"
+          [disabled]="vm.baselineBusy || vm.isAnyRunning" (change)="vm.authorizeExecution($any($event.target).checked)"/>
+          <span><strong>Autorizo la ejecución de pruebas del repositorio en un worker aislado para esta wave y snapshot.</strong>
+          <small>Hazlo antes de ejecutar Baseline: así Verify podrá comparar las pruebas antes y después del cambio.
+            <ng-container *ngIf="info.worker_mode==='disabled'"> Este servidor tiene el worker desactivado, así que solo se registrará la sintaxis.</ng-container></small></span>
+        </label>
+      </div>
+
+      <div class="test-list"><h3>Suites de pruebas</h3>
+        <ul *ngIf="info.tests.length;else noTests">
+          <li *ngFor="let test of info.tests"><code>{{test.path}}</code><span>{{test.framework}}</span></li></ul>
+        <ng-template #noTests><p class="caption">No se detectó ninguna suite compatible, así que no se podrá afirmar equivalencia.</p></ng-template></div>
+
       <div class="baseline-run-card" *ngIf="vm.latestRun('baseline') as last">
         <div class="baseline-run-head">
-          <strong>Resultado de Behavioral Baseline</strong>
-          <ll-status-badge [status]="last.data?.tests?.status || last.status"/>
+          <h3>Resultado del baseline</h3>
+          <ll-status-badge [status]="last.status"/>
         </div>
-        <p class="caption">Estado: {{last.status}} · Pruebas: {{last.data?.tests?.status || 'sin resultado'}} · Sintaxis: {{(last.data?.static_checks?.total || last.data?.static?.total || 0) - (last.data?.static_checks?.failed || last.data?.static?.failed || 0)}} / {{last.data?.static_checks?.total || last.data?.static?.total || 0}} OK</p>
-        <pre class="baseline-log" *ngIf="last.data?.tests?.output">{{last.data?.tests?.output}}</pre>
+        <dl class="run-facts">
+          <div><dt>Pruebas</dt><dd><ll-status-badge [status]="last.data?.tests?.status || 'not_run'"/></dd></div>
+          <div><dt>Sintaxis</dt><dd>{{(last.data?.static_checks?.total || last.data?.static?.total || 0) - (last.data?.static_checks?.failed || last.data?.static?.failed || 0)}} de {{last.data?.static_checks?.total || last.data?.static?.total || 0}} archivos correctos</dd></div>
+        </dl>
+        <details class="disclosure" *ngIf="last.data?.tests?.output"><summary>Ver salida de las pruebas</summary>
+          <pre class="baseline-log">{{last.data?.tests?.output}}</pre></details>
       </div>
-      <details>
-        <summary class="caption" style="cursor:pointer;font-weight:600">Casos propuestos por IA ({{info.proposals.length}}) — opcional</summary>
-        <div class="case-heading" style="margin-top:10px"><h3>Casos propuestos por IA</h3><button llButton variant="secondary" type="button" [disabled]="vm.baselineBusy || project.provider==='demo'"
-          (click)="vm.generateTestSuggestions()"><ll-icon name="auto_awesome" size="sm"/> {{vm.baselineBusy?'Generando...':'Proponer casos'}}</button></div>
+
+      <details class="disclosure proposals">
+        <summary>Casos de prueba propuestos por IA ({{info.proposals.length}}) · opcional</summary>
+        <div class="case-heading"><p class="caption">La IA puede sugerir casos que faltan. No se ejecutan automáticamente.</p>
+          <button llButton variant="secondary" size="sm" type="button" [disabled]="vm.baselineBusy || project.provider==='demo'"
+          (click)="vm.generateTestSuggestions()"><ll-icon name="auto_awesome" size="sm"/> {{vm.baselineBusy?'Generando…':'Proponer casos'}}</button></div>
+        <p class="caption" *ngIf="project.provider==='demo'">No disponible con el motor Demo.</p>
         <div class="cases" *ngIf="info.proposals.length;else noProposals">
           <article class="case" *ngFor="let item of info.proposals"><div class="case-header"><strong>{{item.data.title}}</strong><ll-status-badge [status]="item.status"/></div>
             <p>Entrada: {{item.data.input}} · Esperado: {{item.data.expected}}</p><code>{{item.data.evidence_file}}</code>
-            <div class="actions"><button llButton variant="secondary" type="button" (click)="vm.decideTestProposal(item.id,true)">Aprobar propuesta</button>
-              <button llButton variant="secondary" type="button" (click)="vm.decideTestProposal(item.id,false)">Descartar</button></div>
+            <div class="actions"><button llButton variant="secondary" size="sm" type="button" (click)="vm.decideTestProposal(item.id,true)">Aprobar propuesta</button>
+              <button llButton variant="ghost" size="sm" type="button" (click)="vm.decideTestProposal(item.id,false)">Descartar</button></div>
           </article></div>
-        <ng-template #noProposals><p class="caption">No hay propuestas generadas.</p></ng-template>
+        <ng-template #noProposals><p class="caption" *ngIf="project.provider!=='demo'">Todavía no hay propuestas.</p></ng-template>
       </details>
     </ng-container>
   </ng-container>
-  <ng-template #noApproval><p class="caption">Consulta el estado de la wave seleccionada para preparar el baseline.</p></ng-template>
+  <ng-template #noApproval><p class="caption">Cargando el estado de la wave seleccionada…</p></ng-template>
 </section>

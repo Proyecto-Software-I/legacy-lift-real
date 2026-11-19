@@ -1,8 +1,8 @@
-<dialog *ngIf="open" #nativeDialog class="ll-dialog panel" [attr.aria-labelledby]="dialogId"
+<dialog *ngIf="open" #nativeDialog class="ll-dialog" [attr.aria-labelledby]="dialogId"
       (cancel)="cancel($event)" (click)="onDialogClick($event)">
-      <header class="ll-dialog-head"><span class="eyebrow">{{eyebrow}}</span>
+      <header class="ll-dialog-head">
+        <h2 [id]="dialogId">{{title}}</h2>
         <button type="button" class="icon-action" (click)="closed.emit()" aria-label="Cerrar ventana"><ll-icon name="close"/></button>
       </header>
-      <h2 [id]="dialogId">{{title}}</h2>
       <ng-content></ng-content>
     </dialog>

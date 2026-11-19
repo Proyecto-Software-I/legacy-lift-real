@@ -1,50 +1,41 @@
-<section class="panel migration-panel" aria-label="Modernización y revisión de cambios">
-  <span class="eyebrow">SPRINT 4 · MODERNIZE</span>
-  <h2>Revisión de la modernización</h2>
-  <p class="muted">Primero revisa qué cambió. Puedes consultar el código completo solo si lo necesitas.</p>
-  <div class="tip" *ngIf="!vm.latestMigration">
-    <ll-icon name="play_circle" size="lg"/>
-    <span>Aprueba la wave, prepara el baseline y pulsa «Ejecutar Modernize» en el panel de acciones.</span>
-  </div>
+<section class="panel migration-panel" aria-label="Revisión de los cambios propuestos">
+  <p class="muted" *ngIf="!vm.latestMigration">Cuando ejecutes Modernize, aquí verás cada archivo modificado y podrás decidir cuáles conservar.</p>
   <ng-container *ngIf="vm.latestMigration as attempt">
-    <div class="summary">
-      <div><small>ESTADO ACTUAL</small><strong>{{attempt.status==='completed'?'Listo para revisar':attempt.status==='failed'?'No se completó':'En proceso'}}</strong></div>
-      <div><small>WAVE</small><strong>{{attempt.wave_id}}</strong></div>
-      <div><small>PACK</small><strong>{{attempt.pack_id}}</strong></div>
-    </div>
-    <p class="muted" *ngIf="attempt.status==='queued'">Esperando a que un worker separado reclame el trabajo. Última señal registrada: {{vm.migrationWorkerSeen || 'no disponible'}}.</p>
-    <p class="muted" *ngIf="attempt.status==='running'">El worker está preparando un candidato. La página se actualizará al terminar.</p>
+    <dl class="summary">
+      <div><dt>Estado</dt><dd><ll-status-badge [status]="attempt.status" [label]="attempt.status==='completed'?'Listo para revisar':attempt.status==='failed'?'No se completó':attempt.status==='queued'?'En cola':'Generando'"/></dd></div>
+      <div><dt>Wave</dt><dd class="mono">{{attempt.wave_id}}</dd></div>
+      <div><dt>Migration Pack</dt><dd>{{attempt.pack_id}}</dd></div>
+      <ng-container *ngIf="vm.migrationReview as review">
+        <div><dt>Archivos conservados</dt><dd>{{review.selected_count}} de {{review.total_files}}</dd></div>
+        <div><dt>Líneas</dt><dd><span class="add">+{{review.added}}</span> <span class="del">−{{review.removed}}</span></dd></div>
+      </ng-container>
+    </dl>
     <p class="inline-error" *ngIf="attempt.error">{{attempt.error}}</p>
-    <div *ngIf="attempt.status==='failed' || (attempt.status==='completed' && attempt.verify_status==='completed' && attempt.verification?.classification==='divergent')" class="retry">
-      <button llButton variant="secondary" type="button" (click)="vm.retryMigration()"><ll-icon name="restart_alt"/> Solicitar otra iteración</button>
-      <small>Requiere una nueva acción humana y respeta el máximo de intentos configurado.</small>
+    <div *ngIf="attempt.status==='completed' && (attempt.decision==='rejected' || (attempt.verify_status==='completed' && attempt.verification?.classification==='divergent'))" class="retry">
+      <button llButton variant="secondary" type="button" (click)="vm.retryMigration()"><ll-icon name="restart_alt" size="sm"/> Solicitar otra iteración</button>
+      <small>Crea un nuevo intento. Respeta el máximo de intentos configurado.</small>
     </div>
     <ng-container *ngIf="vm.migrationReview as review">
-      <div class="summary lines"><div><small>ARCHIVOS CAMBIADOS</small><strong>{{review.total_files}}</strong></div>
-        <div><small>INCLUIDOS</small><strong>{{review.selected_count}}</strong></div>
-        <div><small>CAMBIOS DE LÍNEAS</small><strong>+{{review.added}} / −{{review.removed}}</strong></div></div>
-      <h3>Qué cambió</h3><p class="muted">{{review.explanation}}</p>
-      <div class="file" *ngFor="let file of review.files">
-        <div class="file-title"><strong>{{file.path}}</strong><span>+{{file.added}} / −{{file.removed}}</span></div>
-        <p>{{file.summary}}.</p>
-        <label class="select-row"><input type="checkbox" [checked]="file.selected" [disabled]="!!attempt.decision || attempt.verify_status==='queued' || attempt.verify_status==='running'"
-          (change)="vm.setMigrationFile(file.path,$any($event.target).checked,file.comment)"/>
-          Conservar este archivo en la versión modernizada</label>
-        <div class="actions-inline">
-          <button llButton variant="secondary" type="button" (click)="vm.showMigrationDiff(file.path)" [attr.aria-expanded]="vm.migrationDiffFile===file.path">
+      <div class="explanation"><h3>Qué cambió</h3><p>{{review.explanation}}</p></div>
+      <article class="file" *ngFor="let file of review.files" [class.excluded]="!file.selected">
+        <div class="file-title"><strong class="mono">{{file.path}}</strong><span><span class="add">+{{file.added}}</span> <span class="del">−{{file.removed}}</span></span></div>
+        <p class="file-summary">{{file.summary}}.</p>
+        <div class="file-controls">
+          <label class="check-row"><input type="checkbox" [checked]="file.selected" [disabled]="!!attempt.decision || attempt.verify_status==='queued' || attempt.verify_status==='running'"
+            (change)="vm.setMigrationFile(file.path,$any($event.target).checked,file.comment)"/>
+            Conservar este archivo en la versión modernizada</label>
+          <button llButton variant="ghost" size="sm" type="button" (click)="vm.showMigrationDiff(file.path)" [attr.aria-expanded]="vm.migrationDiffFile===file.path">
             <ll-icon name="code" size="sm"/> {{vm.migrationDiffFile===file.path?'Ocultar diff completo':'Ver diff completo'}}</button>
         </div>
-        <details>
-          <summary style="font-size:12px;color:var(--color-muted);cursor:pointer">Agregar nota opcional</summary>
-          <label class="comment-label" style="margin-top:8px">
-            <input class="input" type="text" [value]="file.comment" [disabled]="!!attempt.decision || attempt.verify_status==='queued' || attempt.verify_status==='running'"
-              (change)="vm.setMigrationFile(file.path,file.selected,$any($event.target).value)" placeholder="Nota opcional de revisión..."/>
-          </label>
+        <pre class="diff" *ngIf="vm.migrationDiffFile===file.path"><code><span *ngFor="let line of diffLines" [class]="lineClass(line)">{{line}}</span></code></pre>
+        <details class="disclosure note">
+          <summary>{{file.comment ? 'Nota: '+file.comment : 'Añadir una nota'}}</summary>
+          <label class="sr-only" [for]="'note-'+file.path">Nota de revisión</label>
+          <input class="input" [id]="'note-'+file.path" type="text" [value]="file.comment" [disabled]="!!attempt.decision || attempt.verify_status==='queued' || attempt.verify_status==='running'"
+            (change)="vm.setMigrationFile(file.path,file.selected,$any($event.target).value)" placeholder="Se guarda al salir del campo"/>
         </details>
-        <pre class="diff" *ngIf="vm.migrationDiffFile===file.path"><code>{{vm.migrationDiffText}}</code></pre>
-      </div>
-      <button llButton variant="primary" type="button" (click)="vm.chooseWorkspaceSection('verify')" [disabled]="review.selected_count===0">
-        Continuar a Verify <ll-icon name="arrow_forward" size="sm"/></button>
+      </article>
+      <p class="muted warn" *ngIf="review.selected_count===0"><ll-icon name="warning" size="sm"/> Conserva al menos un archivo para poder verificar.</p>
     </ng-container>
   </ng-container>
 </section>

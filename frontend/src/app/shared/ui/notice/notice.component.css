@@ -1,8 +1,8 @@
-/* Encapsulated styling for notice. */
-.ll-notice { display: flex; align-items: center; gap: 12px; color: var(--color-success); border: 1px solid var(--color-success-border); border-radius: var(--radius-md); background: var(--color-success-surface); padding: 12px 14px; margin-bottom: 18px; line-height: 1.55; }
+.ll-notice { display: flex; align-items: flex-start; gap: 10px; color: var(--color-text); border: 1px solid var(--color-border-strong); border-radius: var(--radius-md); background: var(--color-surface-raised); padding: 11px 8px 11px 13px; line-height: 1.5; font-size: 13.5px; }
+.ll-notice > ll-icon { color: var(--color-success); margin-top: 1px; }
 .ll-notice-error { color: var(--color-danger); background: var(--color-danger-surface); border-color: var(--color-danger-border); }
-.ll-notice>span { flex: 1; overflow-wrap: anywhere; }
-.ll-notice-close { color: inherit; border: 0; background: transparent; display: grid; place-items: center; width: 30px; height: 30px; border-radius: 6px; }
-.ll-notice-close:hover { background: color-mix(in srgb, var(--color-text) 9%, transparent); }
-.ll-notice { background: var(--color-success-surface); border-color: var(--color-success-border); }
-.ll-notice-error { background: var(--color-danger-surface); border-color: var(--color-danger-border); }
+.ll-notice-error > ll-icon { color: var(--color-danger); }
+.ll-notice>span { flex: 1; overflow-wrap: anywhere; padding-top: 1px; }
+.ll-notice-close { color: inherit; border: 0; background: transparent; display: grid; place-items: center; width: 28px; height: 28px; border-radius: 6px; flex: none; opacity: .75; }
+.ll-notice-close:hover { opacity: 1; background: color-mix(in srgb, var(--color-text) 9%, transparent); }
+:host(.toast) .ll-notice { box-shadow: var(--shadow-float); }

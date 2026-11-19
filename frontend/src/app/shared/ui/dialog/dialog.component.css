@@ -1,6 +1,5 @@
-/* Encapsulated styling for dialog. */
-.ll-dialog::backdrop { background: var(--color-overlay); backdrop-filter: blur(7px); }
-.ll-dialog { width: min(calc(100vw - 32px), 510px); max-height: min(90dvh, 800px); overflow: auto; padding: 28px; color: var(--color-text); box-shadow: var(--shadow-dialog); }
-.ll-dialog-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
-.ll-dialog>h2 { font-size: 25px; margin: 0 0 8px; }
-.ll-dialog { background: var(--color-surface); border-color: var(--color-border); }
+.ll-dialog::backdrop { background: var(--color-overlay); backdrop-filter: blur(3px); }
+.ll-dialog { width: min(calc(100vw - 32px), 520px); max-height: min(90dvh, 820px); overflow: auto; padding: 24px; color: var(--color-text); background: var(--color-surface); border: 1px solid var(--color-border); border-radius: var(--radius-lg); box-shadow: var(--shadow-dialog); }
+.ll-dialog-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 8px; }
+.ll-dialog-head h2 { font-size: 20px; margin: 6px 0 0; }
+.ll-dialog-head .icon-action { margin: -4px -6px 0 0; }

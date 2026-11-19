@@ -15,7 +15,8 @@ export class DialogComponent {
   @Input() open = false;
   @Input({required:true}) title = '';
   @Input({required:true}) dialogId = '';
-  @Input() eyebrow = 'LEGACYLIFT';
+  /** Kept for template compatibility; dialogs no longer render a kicker. */
+  @Input() eyebrow = '';
   @Output() closed = new EventEmitter<void>();
 
   @ViewChild('nativeDialog') set nativeDialog(ref: ElementRef<HTMLDialogElement> | undefined) {

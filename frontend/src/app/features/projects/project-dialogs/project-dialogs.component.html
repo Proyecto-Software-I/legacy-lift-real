@@ -1,38 +1,43 @@
-<ll-dialog [open]="vm.showCreate && vm.authenticated" dialogId="createProjectTitle" title="Crear proyecto" eyebrow="NUEVO PROYECTO" (closed)="vm.showCreate=false">
-  <p class="dialog-description">Define qué sistema vas a analizar. Podrás importar su código después de crearlo.</p>
+<ll-dialog [open]="vm.showCreate && vm.authenticated" dialogId="createProjectTitle" title="Crear proyecto" (closed)="vm.showCreate=false">
+  <p class="dialog-description">Indica qué sistema vas a modernizar. Importarás su código en el siguiente paso.</p>
   <form (ngSubmit)="vm.create()" class="dialog-form">
     <div class="form-field"><label for="projectName">Nombre del proyecto</label><input id="projectName" name="name" class="input" [(ngModel)]="vm.createName" required minlength="3" maxlength="80" placeholder="Ej. Facturación legacy"/></div>
-    <div class="form-field"><label for="systemName">Sistema legacy</label><input id="systemName" name="system" class="input" [(ngModel)]="vm.createSystem" required minlength="2" maxlength="80" placeholder="Ej. API Python 3.8"/></div>
-    <div class="form-field" *ngIf="vm.organizations.length"><label for="orgSelect">Organización de destino</label>
+    <div class="form-field"><label for="systemName">Sistema legacy</label><input id="systemName" name="system" class="input" [(ngModel)]="vm.createSystem" required minlength="2" maxlength="80" placeholder="Ej. API Python 3.8"/>
+      <small>Tecnología o nombre interno; te ayuda a reconocerlo en la lista.</small></div>
+    <fieldset class="form-field provider-field">
+      <legend class="label">Motor de análisis</legend>
+      <label class="provider-option" *ngFor="let engine of vm.providers" [class.disabled]="!engine.ready" [class.checked]="vm.createProvider===engine.id">
+        <input type="radio" name="provider" [value]="engine.id" [(ngModel)]="vm.createProvider" [disabled]="!engine.ready"/>
+        <span class="provider-copy"><strong>{{engine.name}}</strong>
+          <small>{{engineHint(engine)}}</small></span>
+      </label>
+      <small>Las credenciales viven en el backend, nunca en el navegador.</small>
+    </fieldset>
+    <div class="form-field" *ngIf="vm.organizations.length > 1"><label for="orgSelect">Organización</label>
       <select class="input" id="orgSelect" name="organization" [(ngModel)]="vm.createOrganizationId">
-        <option *ngFor="let org of vm.organizations" [value]="org.id" [disabled]="org.role==='viewer'">{{org.name}} · {{org.role}}</option>
-      </select><small>Los proyectos quedan aislados por organización. Solo Developer, Admin y Owner pueden crear.</small></div>
-    <div class="form-field"><label for="providerSelect">Motor de inteligencia artificial</label><select class="input" id="providerSelect" name="provider" [(ngModel)]="vm.createProvider">
-      <option *ngFor="let engine of vm.providers" [ngValue]="engine.id" [disabled]="!engine.ready">{{engine.name}}{{engine.ready?'':' — requiere configuración'}}</option></select>
-      <small>Las credenciales se mantienen en el backend, no en el navegador.</small></div>
-    <div class="dialog-actions"><button llButton variant="secondary" type="button" (click)="vm.showCreate=false">Cancelar</button>
-      <button llButton variant="primary" type="submit" [disabled]="vm.busy || vm.createName.trim().length<3 || vm.createSystem.trim().length<2"><ll-icon name="add" size="sm"/> {{vm.busy?'Creando...':'Crear proyecto'}}</button></div>
+        <option *ngFor="let org of vm.organizations" [value]="org.id" [disabled]="org.role==='viewer'">{{org.name}}{{org.role==='viewer'?' (solo lectura)':''}}</option>
+      </select><small>Solo los miembros de la organización verán este proyecto.</small></div>
+    <div class="dialog-actions"><button llButton variant="ghost" type="button" (click)="vm.showCreate=false">Cancelar</button>
+      <button llButton variant="primary" type="submit" [disabled]="vm.busy || vm.createName.trim().length<3 || vm.createSystem.trim().length<2">{{vm.busy?'Creando…':'Crear proyecto'}}</button></div>
   </form>
 </ll-dialog>
 
-<ll-dialog [open]="vm.showHelp" dialogId="helpTitle" title="Cómo funciona LegacyLift" eyebrow="GUÍA RÁPIDA" (closed)="vm.showHelp=false">
-  <p class="dialog-description">Cada fase produce evidencia verificable y conserva el código original.</p>
+<ll-dialog [open]="vm.showHelp" dialogId="helpTitle" title="Cómo funciona LegacyLift" (closed)="vm.showHelp=false">
+  <p class="dialog-description">Cada paso produce evidencia que usa el siguiente. El código original nunca se modifica y cada cambio pasa por tu aprobación.</p>
   <ol class="help-steps">
-    <li>Elige Codex, Claude o el motor Demo al crear el proyecto.</li>
-    <li>Importa un ZIP o repositorio GitHub. El inventario se genera automáticamente.</li>
-    <li>Ejecuta Understand, Assess y Plan en secuencia.</li>
-    <li>Revisa y aprueba el plan; a continuación ejecuta Baseline.</li>
-    <li>Modernize transforma una copia, no el repositorio original.</li>
-    <li>Verify muestra las comprobaciones; revisa y aprueba o rechaza.</li>
+    <li><strong>Entender.</strong> Importa un ZIP o un repositorio. Discover, Understand y Assess describen el sistema y sus riesgos.</li>
+    <li><strong>Planificar.</strong> Plan propone waves de cambio; apruebas el Blueprint y una wave. Baseline registra el comportamiento actual.</li>
+    <li><strong>Modernizar.</strong> Modernize genera un candidato sobre una copia. Verify lo compara con el original y tú decides.</li>
+    <li><strong>Entregar.</strong> Descarga el código modernizado, el parche y el informe.</li>
   </ol>
-  <p class="help-callout"><ll-icon name="info"/> Los tests requieren VALIDATION_MODE=docker. En modo static no se declara equivalencia de comportamiento.</p>
+  <p class="help-callout"><ll-icon name="info" size="sm"/> Para comparar pruebas reales el servidor necesita <code>VALIDATION_MODE=docker</code>. En modo estático solo se comprueba la sintaxis y no se declara equivalencia.</p>
   <div class="dialog-actions"><button llButton variant="primary" type="button" (click)="vm.showHelp=false">Entendido</button></div>
 </ll-dialog>
 
-<ll-dialog [open]="vm.showEdit && !!vm.selected" dialogId="editTitle" title="Editar proyecto" eyebrow="CONFIGURACIÓN" (closed)="vm.showEdit=false">
+<ll-dialog [open]="vm.showEdit && !!vm.selected" dialogId="editTitle" title="Editar proyecto" (closed)="vm.showEdit=false">
   <form (ngSubmit)="vm.saveProject()" class="dialog-form">
     <div class="form-field"><label for="editName">Nombre</label><input id="editName" class="input" name="editName" [(ngModel)]="vm.editName" required minlength="3" maxlength="80"/></div>
     <div class="form-field"><label for="editSystem">Sistema legacy</label><input id="editSystem" class="input" name="editSystem" [(ngModel)]="vm.editSystem" required minlength="2" maxlength="80"/></div>
-    <div class="dialog-actions"><button llButton variant="secondary" type="button" (click)="vm.showEdit=false">Cancelar</button><button llButton variant="primary" type="submit" [disabled]="vm.busy || vm.editName.trim().length<3 || vm.editSystem.trim().length<2">Guardar cambios</button></div>
+    <div class="dialog-actions"><button llButton variant="ghost" type="button" (click)="vm.showEdit=false">Cancelar</button><button llButton variant="primary" type="submit" [disabled]="vm.busy || vm.editName.trim().length<3 || vm.editSystem.trim().length<2">Guardar cambios</button></div>
   </form>
 </ll-dialog>

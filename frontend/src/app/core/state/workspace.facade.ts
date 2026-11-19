@@ -313,7 +313,8 @@ export class WorkspaceFacade {
     if (id === 'modernize') return this.isStepGateComplete('baseline') && this.latestRun('modernize')?.status === 'completed' && this.latestMigration?.status === 'completed';
     if (id === 'verify') {
       const v = this.latestMigration?.verification;
-      return this.isStepGateComplete('modernize') && this.latestRun('verify')?.status === 'completed' && this.latestMigration?.verify_status === 'completed' && (v?.classification === 'verified_within_tests' || this.selected.migration_decision === 'approved');
+      // Product §9: the result always needs an explicit human approval, even when tests pass.
+      return this.isStepGateComplete('modernize') && this.latestRun('verify')?.status === 'completed' && this.latestMigration?.verify_status === 'completed' && !!v && this.selected.migration_decision === 'approved';
     }
     if (id === 'evidence') return this.isStepGateComplete('verify');
     return false;
@@ -335,7 +336,7 @@ export class WorkspaceFacade {
   get nextStepLabel(): string {
     const next = this.nextStepId;
     if (!next) return '';
-    if (next === 'evidence') return 'Evidencias';
+    if (next === 'evidence') return 'Entregables';
     return STAGES.find(s => s.id === next)?.label || next;
   }
 
@@ -363,7 +364,19 @@ export class WorkspaceFacade {
   get decisionReady(): boolean { return this.latestMigration?.verify_status==='completed' && !!this.latestMigration?.verification && !this.latestMigration?.decision; }
   get isAnyRunning(): boolean { return !!this.selected?.runs?.some(r => r.status === 'running'); }
   get stageRunnable(): boolean { return !!this.selected?.phase_ready?.[this.stageId] && !this.isAnyRunning; }
+  /** Human name of an analysis engine; one source of truth for every screen. */
+  providerLabel(id?: string | null): string {
+    return ({codex:'Codex', gemini:'Gemini', claude:'Claude', demo:'Demo sin IA'} as Record<string,string>)[id || ''] || 'Demo sin IA';
+  }
   get chosenProvider(): Provider | undefined { return this.providers.find(p => p.id === this.selected?.provider); }
+  /** Which provider/model/template produced the latest result of a phase (product §9). */
+  provenance(stage: string): {provider:string;model:string;template:string;engine:string;fallback:boolean}|null {
+    const run = this.latestRun(stage);
+    if (!run || run.status !== 'completed') return null;
+    const prov = (run.data || {})['provenance'] || {};
+    return {provider: prov.provider || run.provider, model: prov.model || run.model || '', template: prov.prompt_template || '',
+      engine: prov.engine || '', fallback: !!prov.fallback};
+  }
 
   latestRun(stage: string): Run | undefined {
     return [...(this.selected?.runs || [])].reverse().find(r => r.phase === stage);
@@ -428,7 +441,14 @@ export class WorkspaceFacade {
     this.error = typeof http?.error?.detail === 'string' ? http.error.detail : http?.message || String(err);
     this.busy = false; this.uploading = false;
   }
-  toast(msg: string): void { this.notice = msg; this.error = ''; }
+  private noticeTimer?: ReturnType<typeof setTimeout>;
+  /** Confirmations are transient: they auto-dismiss so they never linger next to a newer state.
+   * Errors stay until dismissed because they require the person to act. */
+  toast(msg: string): void {
+    this.notice = msg; this.error = '';
+    if (this.noticeTimer) clearTimeout(this.noticeTimer);
+    this.noticeTimer = setTimeout(() => { if (this.notice === msg) this.notice = ''; }, 5200);
+  }
   dismiss(): void { this.notice = ''; this.error = ''; }
 
   login(): void {
@@ -857,6 +877,25 @@ export class WorkspaceFacade {
   }
   updateBlueprintDraft(data:BlueprintData):void {
     this.blueprintDraft={...data,waves:data.waves.map(w=>({...w,files:[...w.files],depends_on:[...w.depends_on]}))};
+  }
+  /** Packs that can actually run today, used to offer a one-step fix for blocked waves. */
+  get executableStrategies():string[] {
+    return [...new Set((this.packs?.packs||[]).filter(p=>p.status==='available').flatMap(p=>p.strategies))];
+  }
+  /** A wave blocked only by its strategy can be unblocked by switching to an executable one.
+   * Returns the strategy to offer, or null when the block has another cause (language, size…). */
+  strategyFix(wave:MigrationWave):string|null {
+    const reason=(this.packs?.compatibility?.[wave.id]||[]).find(m=>m.reason)?.reason||'';
+    if(this.packMatch(wave).compatible || !/estrategia/i.test(reason)) return null;
+    return this.executableStrategies[0] || null;
+  }
+  /** Saves a new Blueprint revision with the wave's strategy replaced. Approvals reset,
+   * exactly as a manual edit would; the person still approves plan and wave explicitly. */
+  adoptStrategy(waveId:string,strategy:string):void {
+    if(!this.selected||!this.blueprint||this.blueprintSaving)return;
+    const base=this.blueprint.data;
+    this.blueprintDraft={...base,waves:base.waves.map(w=>w.id===waveId?{...w,strategy,files:[...w.files],depends_on:[...w.depends_on]}:{...w,files:[...w.files],depends_on:[...w.depends_on]})};
+    this.saveBlueprint();
   }
   saveBlueprint():void {
     if(!this.selected||!this.blueprintDraft||this.blueprintSaving)return;

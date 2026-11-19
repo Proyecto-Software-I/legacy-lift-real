@@ -1,14 +1,21 @@
 :host { display:contents; }
-/* Feature-owned styles for dialogs (no feature CSS in global stylesheet). */
-.help-text { display: flex; align-items: flex-start; gap: 7px; line-height: 1.5; margin: 0; }
-@media (max-width: 400px) {
-  .dialog-actions { flex-wrap: wrap; }
-  .dialog-actions .ll-btn { flex: 1; }
-}
-.dialog-description { color: var(--color-muted); font-size: 13px; line-height: 1.65; margin: 0 0 23px; }
+.dialog-description { color: var(--color-text-secondary); font-size: 14px; line-height: 1.6; margin: 0 0 20px; }
 .dialog-form { display: grid; gap: 18px; }
-.dialog-actions { display: flex; gap: 10px; justify-content: flex-end; margin-top: 10px; }
-.help-steps { color: var(--color-text-secondary); padding-left: 25px; display: grid; gap: 12px; }
-.help-steps li { padding-left: 3px; }
-.help-steps li::marker { color: var(--color-accent); font-family: 'JetBrains Mono',monospace; }
-.help-callout { display: flex; align-items: flex-start; gap: 10px; color: var(--color-text-secondary); border: 1px solid var(--color-border); background: var(--color-shade); padding: 12px; border-radius: var(--radius-sm); font-size: 12px; }
+.dialog-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 8px; }
+.provider-field { border: 0; padding: 0; margin: 0; }
+.provider-field legend { padding: 0; margin-bottom: 6px; }
+.provider-option { display: flex; align-items: flex-start; gap: 10px; padding: 10px 12px; border: 1px solid var(--color-border); border-radius: var(--radius-sm); cursor: pointer; transition: border-color var(--transition-fast); }
+.provider-option + .provider-option { margin-top: -1px; }
+.provider-option:hover { border-color: var(--color-border-strong); }
+.provider-option.checked { border-color: var(--color-text-secondary); background: var(--color-surface-raised); position: relative; }
+.provider-option.disabled { cursor: not-allowed; border-style: dashed; }
+.provider-option.disabled strong { color: var(--color-text-secondary); }
+.provider-option.disabled input { opacity: .5; }
+.provider-option input { margin: 3px 0 0; accent-color: var(--color-accent); width: 16px; height: 16px; flex: none; }
+.provider-copy { display: grid; gap: 1px; }
+.provider-copy strong { font-size: 13.5px; }
+.provider-copy small { color: var(--color-muted); font-size: 12.5px; }
+.help-steps { color: var(--color-text-secondary); padding-left: 22px; display: grid; gap: 10px; margin: 0 0 18px; }
+.help-steps strong { color: var(--color-text); }
+.help-callout { display: flex; align-items: flex-start; gap: 10px; color: var(--color-text-secondary); border: 1px solid var(--color-border); background: var(--color-panel-subtle); padding: 12px; border-radius: var(--radius-sm); font-size: 13px; margin: 0; }
+@media (max-width: 400px) { .dialog-actions { flex-wrap: wrap; } .dialog-actions .ll-btn { flex: 1; } }

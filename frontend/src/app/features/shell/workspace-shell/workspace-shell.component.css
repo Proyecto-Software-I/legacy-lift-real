@@ -1,8 +1,11 @@
 :host { display:block; min-height:100dvh; }
-/* Feature-owned styles for shell (no feature CSS in global stylesheet). */
-.app-shell { display: flex; position: relative; z-index: 1; min-height: 100dvh; }
+.app-shell { display: flex; position: relative; min-height: 100dvh; }
 .mobile-backdrop { display: none; }
 .shell-body { min-width: 0; flex: 1; }
+.toast-region { position: fixed; right: 20px; bottom: 20px; z-index: 70; width: min(400px, calc(100vw - 32px)); pointer-events: none; }
+.toast-region ll-notice { pointer-events: auto; animation: toast-in 180ms ease-out; }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
 @media (max-width: 800px) {
   .mobile-backdrop { display: block; position: fixed; inset: 0; background: var(--color-overlay); z-index: 55; }
+  .toast-region { right: 16px; left: 16px; bottom: 16px; width: auto; }
 }

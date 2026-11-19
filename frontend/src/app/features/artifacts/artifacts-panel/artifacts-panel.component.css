@@ -1,36 +1,33 @@
 :host { display:block; min-width:0; }
-/* Feature-owned styles for artifacts (no feature CSS in global stylesheet). */
-.artifacts-panel { margin-top: 19px; }
-.artifacts-actions { display: flex; flex-wrap: wrap; gap: 8px; }
-.artifact-tabs { display: flex; align-items: center; gap: 7px; overflow-x: auto; padding-bottom: 13px; margin-bottom: 17px; border-bottom: 1px solid var(--color-border); }
-.artifact-tabs button { display: flex; gap: 7px; align-items: center; padding: 9px 11px; background: var(--color-shade); border: 1px solid var(--color-border); color: var(--color-text-secondary); border-radius: 7px; font: 600 11px 'JetBrains Mono',monospace; white-space: nowrap; }
-.artifact-tabs button:hover { background: var(--color-hover); }
-.artifact-tabs button.selected { border-color: var(--color-accent-border); background: var(--color-accent-surface); color: var(--color-accent); }
-.artifact-tabs>span { font-size: 12px; color: var(--color-muted); padding: 8px 0; }
-.artifact-document { border: 1px solid var(--color-border); border-radius: var(--radius-md); overflow: hidden; }
-.document-bar { display: flex; align-items: center; gap: 9px; background: var(--color-shade); border-bottom: 1px solid var(--color-border); padding: 11px 15px; color: var(--color-text-secondary); font: 600 11px 'JetBrains Mono',monospace; }
-.document-bar>span { flex: 1; overflow: hidden; text-overflow: ellipsis; }
-.markdown-view,.raw-view { color: var(--color-text-secondary); background: var(--color-panel-subtle); padding: 22px; max-height: 650px; overflow: auto; font-size: 13px; line-height: 1.7; }
-:host ::ng-deep .markdown-view :is(h1,h2,h3,h4) { color: var(--color-text); margin: 19px 0 10px; }
-:host ::ng-deep .markdown-view h1 { font-size: 24px; }
-:host ::ng-deep .markdown-view h2 { font-size: 19px; }
-:host ::ng-deep .markdown-view pre { white-space: pre-wrap; background: var(--color-shade); padding: 15px; border-radius: 7px; overflow-wrap: anywhere; }
-:host ::ng-deep .markdown-view code, .raw-view { font-family: 'JetBrains Mono',monospace; font-size: 11px; }
-:host ::ng-deep .markdown-view table { border-collapse: collapse; width: 100%; }
-:host ::ng-deep .markdown-view th,:host ::ng-deep .markdown-view td { border: 1px solid var(--color-border); padding: 9px; text-align: left; }
-:host ::ng-deep .markdown-view a { color: var(--color-accent); }
+.artifacts-panel { display: grid; grid-template-columns: 220px minmax(0,1fr); min-height: 420px; overflow: hidden; }
+.artifact-index { border-right: 1px solid var(--color-border); padding: 14px 10px; display: grid; align-content: start; gap: 14px; background: var(--color-panel-subtle); }
+.index-group { display: grid; gap: 1px; }
+.index-label { font-size: 12px; font-weight: 650; color: var(--color-muted); padding: 0 8px 4px; }
+.artifact-index button { display: flex; gap: 8px; align-items: center; width: 100%; padding: 7px 8px; background: transparent; border: 0; border-radius: var(--radius-xs); color: var(--color-text-secondary); font: 500 12.5px var(--font-mono); text-align: left; }
+.artifact-index button span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.artifact-index button:hover { background: var(--color-hover); color: var(--color-text); }
+.artifact-index button.selected { background: var(--color-surface-raised); color: var(--color-text); box-shadow: inset 2px 0 0 var(--color-text); }
+.index-empty { font-size: 13px; color: var(--color-muted); margin: 0; padding: 0 8px; }
+.artifact-document { min-width: 0; display: flex; flex-direction: column; }
+.document-bar { display: flex; align-items: center; gap: 6px; border-bottom: 1px solid var(--color-border); padding: 8px 10px 8px 18px; font-size: 12.5px; color: var(--color-text-secondary); }
+.document-bar > span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.markdown-view,.raw-view { color: var(--color-text-secondary); padding: 20px 24px; max-height: 680px; overflow: auto; font-size: 14px; line-height: 1.7; }
+.markdown-view { max-width: 80ch; }
+:host ::ng-deep .markdown-view :is(h1,h2,h3,h4) { color: var(--color-text); margin: 22px 0 8px; }
+:host ::ng-deep .markdown-view > :first-child { margin-top: 0; }
+:host ::ng-deep .markdown-view h1 { font-size: 21px; }
+:host ::ng-deep .markdown-view h2 { font-size: 17px; }
+:host ::ng-deep .markdown-view pre { white-space: pre-wrap; background: var(--color-bg); border: 1px solid var(--color-border); padding: 12px; border-radius: var(--radius-sm); overflow-wrap: anywhere; }
+:host ::ng-deep .markdown-view code, .raw-view { font-family: var(--font-mono); font-size: 12.5px; }
+:host ::ng-deep .markdown-view table { border-collapse: collapse; width: 100%; font-size: 13px; }
+:host ::ng-deep .markdown-view th,:host ::ng-deep .markdown-view td { border-bottom: 1px solid var(--color-border); padding: 7px 9px; text-align: left; }
+:host ::ng-deep .markdown-view a { color: var(--color-text); }
 .raw-view { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
-.artifact-placeholder { min-height: 145px; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 7px; color: var(--color-muted); text-align: center; }
-.artifact-placeholder>ll-icon { color: var(--color-accent); }
-.artifact-placeholder strong { color: var(--color-text-secondary); font-size: 13px; }
-.artifact-placeholder p { margin: 0; font-size: 12px; }
-@media (max-width: 630px) {
-  .artifact-tabs { margin-left: -3px; margin-right: -3px; }
-  .document-bar { flex-wrap: wrap; }
-  .artifacts-actions .ll-btn { flex: 1; }
-}
-
-.artifacts-panel { padding:24px; }
-@media (max-width:630px) {
-.artifacts-panel {padding:18px;}
+.artifact-placeholder { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; color: var(--color-muted); text-align: center; padding: 40px 20px; }
+.artifact-placeholder strong { color: var(--color-text-secondary); }
+.artifact-placeholder p { margin: 0; font-size: 13px; }
+@media (max-width: 760px) {
+  .artifacts-panel { grid-template-columns: 1fr; }
+  .artifact-index { border-right: 0; border-bottom: 1px solid var(--color-border); max-height: 240px; overflow-y: auto; }
+  .markdown-view,.raw-view { padding: 16px; }
 }

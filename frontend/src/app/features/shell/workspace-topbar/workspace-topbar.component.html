@@ -1,13 +1,19 @@
 <header class="topbar">
-      <div class="topbar-leading"><button type="button" class="icon-action mobile-menu" (click)="vm.mobileNavOpen=true" aria-label="Abrir menú" [attr.aria-expanded]="vm.mobileNavOpen"><ll-icon name="menu"/></button>
-        <nav class="breadcrumbs" aria-label="Ruta de navegación"><span>Workspace</span><ll-icon name="chevron_right" size="sm"/><strong>{{vm.selected?.name || 'Resumen'}}</strong></nav></div>
-      <div class="topbar-actions">
-        <ll-organization-console/>
-        <button class="theme-action icon-action" type="button" (click)="vm.toggleTheme()"
-          [attr.aria-label]="vm.theme === 'dark' ? 'Activar tema claro' : 'Activar tema oscuro'"
-          [attr.title]="vm.theme === 'dark' ? 'Tema claro' : 'Tema oscuro'">
-          <ll-icon [name]="vm.theme === 'dark' ? 'light_mode' : 'dark_mode'"/>
-        </button>
-        <button type="button" class="icon-action" title="Ayuda" aria-label="Abrir guía rápida" (click)="vm.showHelp=true"><ll-icon name="help"/></button>
-        <span class="topbar-avatar" [attr.aria-label]="'Usuario: '+vm.currentUser">{{vm.userInitial}}</span></div>
-    </header>
+  <div class="topbar-leading">
+    <button type="button" class="icon-action mobile-menu" (click)="vm.mobileNavOpen=true" aria-label="Abrir menú de proyectos" [attr.aria-expanded]="vm.mobileNavOpen"><ll-icon name="menu"/></button>
+    <nav class="breadcrumbs" aria-label="Ubicación">
+      <span class="crumb-root">Proyectos</span>
+      <ll-icon name="chevron_right" size="sm" class="crumb-sep"/>
+      <strong aria-current="page">{{vm.selected?.name || 'Inicio'}}</strong>
+    </nav>
+  </div>
+  <div class="topbar-actions">
+    <ll-organization-console/>
+    <button class="theme-action icon-action" type="button" (click)="vm.toggleTheme()"
+      [attr.aria-label]="vm.theme === 'dark' ? 'Activar tema claro' : 'Activar tema oscuro'"
+      [attr.title]="vm.theme === 'dark' ? 'Tema claro' : 'Tema oscuro'">
+      <ll-icon [name]="vm.theme === 'dark' ? 'light_mode' : 'dark_mode'" size="sm"/>
+    </button>
+    <button type="button" class="icon-action" title="Cómo funciona" aria-label="Abrir guía rápida" (click)="vm.showHelp=true"><ll-icon name="help" size="sm"/></button>
+  </div>
+</header>

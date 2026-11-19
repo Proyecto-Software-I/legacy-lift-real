@@ -1,9 +1,9 @@
 <button type="button" class="org-trigger" (click)="show()" aria-label="Abrir organizaciones y reportes">
   <ll-icon name="corporate_fare" size="sm"/> <span>Organizaciones</span>
 </button>
-<ll-dialog [open]="open()" dialogId="organizationsTitle" title="Organizaciones y reportes" eyebrow="SPRINT 5 · PRODUCTIZE" (closed)="close()">
+<ll-dialog [open]="open()" dialogId="organizationsTitle" title="Organizaciones y reportes" (closed)="close()">
   <div class="org-panel">
-    <p class="muted">Cada proyecto pertenece a una organización. Tus proyectos anteriores siguen en el espacio personal.</p>
+    <p class="muted">Cada proyecto pertenece a una organización. Tus proyectos personales siguen en tu espacio personal.</p>
     <p *ngIf="error()" class="org-error" role="alert">{{error()}}</p>
     <p *ngIf="info()" class="org-info" role="status">{{info()}}</p>
     <label for="organizationSelect">Organización</label>

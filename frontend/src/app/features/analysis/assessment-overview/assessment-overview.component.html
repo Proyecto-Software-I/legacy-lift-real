@@ -1,27 +1,27 @@
 <section class="panel assessment-panel" *ngIf="vm.assessmentData || vm.isAssessRunning" aria-label="Evaluación de riesgos y recomendaciones">
-  <ll-section-heading eyebrow="ASSESS / EVALUACIÓN" title="Salud técnica observada"
-    description="Indicadores medidos sobre el snapshot activo. Ningún hallazgo heurístico equivale por sí solo a un defecto confirmado." />
+  <ll-section-heading title="Salud técnica observada"
+    description="Indicadores medidos sobre el snapshot activo. Una señal heurística no es por sí sola un defecto confirmado." />
   <div *ngIf="vm.assessmentData?.status==='partial' || vm.isAssessRunning" class="partial" role="status" aria-live="polite">
-    <ll-icon name="progress_activity" size="sm"/> Procesando evaluación {{vm.assessmentProgress?.progress || 0}}% · los resultados pueden ser preliminares.
+    <ll-icon name="progress_activity" size="sm"/> Evaluando ({{vm.assessmentProgress?.progress || 0}} %). Los resultados pueden ser preliminares.
   </div>
   <ng-container *ngIf="vm.assessmentData as a">
     <div class="assessment-metrics"><article class="assessment-metric" *ngFor="let m of a.metrics">
       <span>{{m.label}}</span><strong>{{m.value}}</strong><small>{{m.unit}}</small>
     </article></div>
     <div class="severity" *ngIf="severities.length">
-      <div class="severity-head"><strong>Señales por severidad</strong><span>{{a.signals.heuristic_findings}} observaciones</span></div>
+      <div class="severity-head"><strong>Señales por severidad</strong><span>{{a.signals.heuristic_findings}} {{a.signals.heuristic_findings===1?'observación':'observaciones'}}</span></div>
       <div class="severity-bar" role="img" aria-label="Reparto de señales heurísticas por severidad">
-        <span *ngFor="let s of severities" [class]="'severity-'+s.name" [style.width.%]="s.percent" [title]="s.name+' · '+s.value"></span>
+        <span *ngFor="let s of severities" [class]="'severity-'+s.name" [style.width.%]="s.percent" [title]="severityLabel(s.name)+': '+s.value"></span>
       </div>
-      <div class="severity-legend"><span *ngFor="let s of severities">{{s.name}}: {{s.value}}</span></div>
+      <div class="severity-legend"><span *ngFor="let s of severities"><i [class]="'dot severity-'+s.name"></i>{{severityLabel(s.name)}}: {{s.value}}</span></div>
     </div>
-    <div class="strategies"><strong>Estrategias por módulo</strong><p>Recomendaciones, no modificaciones aprobadas.</p>
+    <div class="strategies"><strong>Estrategia recomendada por módulo</strong><p>Son recomendaciones: nada se modifica hasta que apruebes un plan.</p>
       <article *ngFor="let item of a.recommendations" class="strategy">
         <span class="strategy-name">{{item.strategy}}</span><div><strong>{{item.module}}</strong><small>{{item.reason}}</small></div>
       </article>
-      <article *ngFor="let item of a.ai_suggestions" class="strategy ai"><span class="strategy-name">IA · {{item.strategy}}</span><div><strong>{{item.module}}</strong><small>{{item.reason}}</small></div></article>
+      <article *ngFor="let item of a.ai_suggestions" class="strategy ai"><span class="strategy-name">{{item.strategy}} <small>sugerido por IA</small></span><div><strong>{{item.module}}</strong><small>{{item.reason}}</small></div></article>
     </div>
     <div class="score-note"><ll-icon name="verified_user" size="sm"/><span>{{a.score_reason}}</span></div>
-    <details class="limits"><summary>Límites de esta evaluación</summary><ul><li *ngFor="let item of a.limits">{{item}}</li></ul></details>
+    <details class="limits disclosure"><summary>Límites de esta evaluación</summary><ul><li *ngFor="let item of a.limits">{{item}}</li></ul></details>
   </ng-container>
 </section>

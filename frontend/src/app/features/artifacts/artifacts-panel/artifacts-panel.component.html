@@ -1,15 +1,21 @@
-<section class="panel artifacts-panel" *ngIf="vm.selected as p" id="artifacts" aria-label="Artefactos de evidencia">
-          <ll-section-heading eyebrow="03 / EVIDENCIA" title="Artefactos generados" description="Explora la documentación y los cambios registrados por cada etapa.">
-            <div class="artifacts-actions"><button llButton variant="secondary" size="sm" type="button" (click)="vm.copyArtifact()" [disabled]="!vm.artifactContent"><ll-icon name="content_copy" size="sm"/> Copiar</button>
-              <button llButton variant="secondary" size="sm" type="button" (click)="vm.download()"><ll-icon name="download" size="sm"/> Exportar ZIP</button></div>
-          </ll-section-heading>
-          <nav class="artifact-tabs" aria-label="Seleccionar artefacto"><button type="button" *ngFor="let f of p.artifacts" [class.selected]="vm.artifactName===f" (click)="vm.openArtifact(f)" [attr.aria-current]="vm.artifactName===f?'page':null"><ll-icon name="description" size="sm"/> {{f}}</button>
-            <span *ngIf="!p.artifacts?.length">Sin artefactos todavía</span></nav>
-          <div class="artifact-document" *ngIf="vm.artifactContent; else noArtifact">
-            <div class="document-bar"><ll-icon name="description" size="sm"/><span>{{vm.artifactName}}</span><ll-status-badge status="completed" label="Generado"/></div>
-            <div *ngIf="vm.rendered;else plainText" class="markdown-view" [innerHTML]="vm.rendered"></div>
-            <ng-template #plainText><pre class="raw-view">{{vm.artifactContent}}</pre></ng-template>
-          </div>
-          <ng-template #noArtifact><div class="artifact-placeholder"><ll-icon name="draft" size="lg"/><strong>Aquí aparecerá la evidencia</strong>
-            <p>Ejecuta una fase o selecciona un artefacto existente para revisarlo.</p></div></ng-template>
-        </section>
+<section class="panel artifacts-panel" *ngIf="vm.selected as p" id="artifacts" aria-label="Artefactos generados">
+  <nav class="artifact-index" aria-label="Seleccionar artefacto">
+    <div class="index-group" *ngFor="let g of groups">
+      <span class="index-label">{{g.label}}</span>
+      <button type="button" *ngFor="let f of g.files" [class.selected]="vm.artifactName===f" (click)="vm.openArtifact(f)" [attr.aria-current]="vm.artifactName===f?'true':null">
+        <ll-icon [name]="f.endsWith('.patch') ? 'difference' : f.endsWith('.json') ? 'data_object' : 'description'" size="sm"/><span>{{f}}</span></button>
+    </div>
+    <p class="index-empty" *ngIf="!p.artifacts?.length">Cada paso que ejecutes añadirá aquí su documento.</p>
+  </nav>
+
+  <div class="artifact-document" *ngIf="vm.artifactContent; else noArtifact">
+    <div class="document-bar"><span class="mono">{{vm.artifactName}}</span>
+      <button llButton variant="ghost" size="sm" type="button" (click)="vm.copyArtifact()" [disabled]="!vm.artifactContent"><ll-icon name="content_copy" size="sm"/> Copiar</button>
+      <button llButton variant="ghost" size="sm" type="button" (click)="vm.download()"><ll-icon name="download" size="sm"/> Exportar ZIP</button>
+    </div>
+    <div *ngIf="vm.rendered;else plainText" class="markdown-view" [innerHTML]="vm.rendered"></div>
+    <ng-template #plainText><pre class="raw-view">{{vm.artifactContent}}</pre></ng-template>
+  </div>
+  <ng-template #noArtifact><div class="artifact-placeholder"><ll-icon name="draft" size="lg"/><strong>Elige un documento</strong>
+    <p>Selecciona un artefacto de la lista para leerlo aquí.</p></div></ng-template>
+</section>

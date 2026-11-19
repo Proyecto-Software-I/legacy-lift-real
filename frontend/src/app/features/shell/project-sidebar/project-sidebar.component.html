@@ -1,29 +1,30 @@
-<aside class="sidebar" [class.sidebar-open]="vm.mobileNavOpen" aria-label="Navegación principal">
+<aside class="sidebar" [class.sidebar-open]="vm.mobileNavOpen" aria-label="Proyectos y cuenta">
     <div class="sidebar-brand brand">
       <ll-brand-logo size="sidebar"/>
-      <span class="brand-caption">MODERNIZATION STUDIO</span>
       <button type="button" class="mobile-close icon-action" (click)="vm.mobileNavOpen=false" aria-label="Cerrar menú"><ll-icon name="close"/></button>
     </div>
-    <div class="sidebar-section-label">NAVEGACIÓN</div>
-    <button type="button" class="sidebar-link active" (click)="vm.scrollToWorkspace()" aria-current="page"><ll-icon name="space_dashboard"/> Resumen <ll-icon name="chevron_right" size="sm"/></button>
-    <div class="sidebar-section-label sidebar-project-heading"><span>PROYECTOS</span><span class="sidebar-count">{{vm.projects.length}}</span></div>
-    <div class="sidebar-search"><ll-icon name="search" size="sm"/>
-      <input class="sidebar-search-input" [(ngModel)]="vm.projectQuery" type="search" aria-label="Buscar proyectos" placeholder="Buscar proyecto..."/>
-    </div>
-    <div class="sidebar-project-list" aria-label="Mis proyectos">
+
+    <button llButton variant="primary" [block]="true" type="button" class="sidebar-new" (click)="vm.showCreate=true;vm.mobileNavOpen=false"><ll-icon name="add" size="sm"/> Nuevo proyecto</button>
+
+    <div class="sidebar-section-label"><span id="projects-label">Proyectos</span><span class="sidebar-count" aria-label="{{vm.projects.length}} proyectos">{{vm.projects.length}}</span></div>
+    <label class="sidebar-search" *ngIf="vm.projects.length > 4"><ll-icon name="search" size="sm"/>
+      <span class="sr-only">Buscar proyectos</span>
+      <input class="sidebar-search-input" [(ngModel)]="vm.projectQuery" type="search" placeholder="Buscar proyecto"/>
+    </label>
+    <nav class="sidebar-project-list" aria-labelledby="projects-label">
       <button *ngFor="let p of vm.filteredProjects" type="button" class="sidebar-project" [class.selected]="p.id===vm.selected?.id"
         [attr.aria-current]="p.id===vm.selected?.id?'page':null" (click)="vm.select(p.id);vm.mobileNavOpen=false">
-        <span class="project-mark">{{p.name.substring(0,1).toUpperCase()}}</span>
+        <span class="project-mark" aria-hidden="true">{{p.name.substring(0,1).toUpperCase()}}</span>
         <span class="project-name">{{p.name}}<small>{{p.system_name}}</small></span>
-        <ll-icon name="chevron_right" size="sm"/>
       </button>
-      <p class="sidebar-no-projects" *ngIf="!vm.filteredProjects.length">{{vm.projects.length?'Ningún proyecto coincide.':'Todavía no tienes proyectos.'}}</p>
-    </div>
-    <button llButton variant="secondary" [block]="true" type="button" class="sidebar-new" (click)="vm.showCreate=true;vm.mobileNavOpen=false"><ll-icon name="add"/> Nuevo proyecto</button>
+      <p class="sidebar-no-projects" *ngIf="!vm.filteredProjects.length">{{vm.projects.length?'Ningún proyecto coincide con la búsqueda.':'Aún no hay proyectos. Crea el primero para importar código.'}}</p>
+    </nav>
+
     <div class="sidebar-bottom">
-      <button class="sidebar-help-link" type="button" (click)="vm.showHelp=true;vm.mobileNavOpen=false"><ll-icon name="help"/> Guía del proceso <ll-icon name="arrow_outward" size="sm"/></button>
-      <div class="sidebar-user"><span class="user-avatar">{{vm.userInitial}}</span><span class="user-copy"><strong>{{vm.currentUser}}</strong><small>Cuenta personal</small></span>
-        <button type="button" class="icon-action logout-action" title="Cerrar sesión" aria-label="Cerrar sesión" (click)="vm.logout()"><ll-icon name="logout"/></button>
+      <button class="sidebar-help-link" type="button" (click)="vm.showHelp=true;vm.mobileNavOpen=false"><ll-icon name="help" size="sm"/> Cómo funciona</button>
+      <div class="sidebar-user"><span class="user-avatar" aria-hidden="true">{{vm.userInitial}}</span>
+        <span class="user-copy"><strong>{{vm.currentUser}}</strong><small>Sesión iniciada</small></span>
+        <button type="button" class="icon-action logout-action" title="Cerrar sesión" aria-label="Cerrar sesión" (click)="vm.logout()"><ll-icon name="logout" size="sm"/></button>
       </div>
     </div>
   </aside>
