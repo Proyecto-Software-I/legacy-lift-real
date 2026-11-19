@@ -476,6 +476,7 @@ export class WorkspaceFacade {
   showError(err: unknown): void {
     const http = err as HttpErrorResponse;
     this.error = typeof http?.error?.detail === 'string' ? http.error.detail : http?.message || String(err);
+    this.toast(this.error);
     this.busy = false; this.uploading = false;
     this.planBusy = false; this.pendingWaveId = null; this.pendingProposalId = null;
     this.migrationBusy = false; this.downloading = null; this.pendingJobId = null; this.githubBusy = false;

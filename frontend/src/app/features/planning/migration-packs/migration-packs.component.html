@@ -65,14 +65,14 @@
           [title]="'Guarda una nueva revisión con la estrategia '+option">
           <ll-icon [name]="option==='LanguageMigration' ? 'translate' : 'build'" size="sm"/> {{vm.strategyLabel(option)}}</button>
         <button *ngIf="plan.status==='approved' && wave.strategy==='Keep' && plan.wave_approvals[wave.id]!=='approved'" llButton variant="secondary" size="sm" type="button"
-          [disabled]="vm.isAnyRunning" (click)="vm.waveDecision(wave.id,true)" title="Keep no ejecuta cambios: confirma la decisión y desbloquea las waves que dependen de esta">
-          <ll-icon name="check" size="sm"/> Confirmar sin cambios</button>
+          [disabled]="vm.isAnyRunning || vm.planBusy || missingDeps(wave).length>0" (click)="vm.waveDecision(wave.id,true)" title="Keep no ejecuta cambios: confirma la decisión y desbloquea las waves que dependen de esta">
+          <ll-icon name="check" size="sm"/> {{vm.pendingWaveId===wave.id?'Confirmando…':'Confirmar sin cambios'}}</button>
         <ng-container *ngIf="plan.status==='approved' && vm.packMatch(wave).compatible && vm.selected.active_wave_id!==wave.id">
-          <button *ngIf="plan.wave_approvals[wave.id]!=='approved'" llButton variant="secondary" size="sm" type="button" [disabled]="vm.isAnyRunning || vm.planBusy" (click)="vm.waveDecision(wave.id,true)">
+          <button *ngIf="plan.wave_approvals[wave.id]!=='approved'" llButton variant="secondary" size="sm" type="button" [disabled]="vm.isAnyRunning || vm.planBusy || missingDeps(wave).length>0" (click)="vm.waveDecision(wave.id,true)">
             <ll-icon name="check" size="sm"/> {{vm.pendingWaveId===wave.id?'Aprobando…':'Aprobar esta wave'}}</button>
           <button *ngIf="plan.wave_approvals[wave.id]==='approved'" llButton variant="secondary" size="sm" type="button" [disabled]="vm.isAnyRunning || vm.planBusy" (click)="vm.selectWave(wave.id)">{{vm.pendingWaveId===wave.id?'Seleccionando…':'Seleccionar'}}</button>
-          <button *ngIf="plan.wave_approvals[wave.id]!=='rejected'" llButton variant="ghost" size="sm" type="button" [disabled]="vm.isAnyRunning || vm.planBusy" (click)="vm.waveDecision(wave.id,false)">{{vm.pendingWaveId===wave.id?'Guardando…':'Rechazar'}}</button>
         </ng-container>
+        <small class="muted" *ngIf="plan.status==='approved' && plan.wave_approvals[wave.id]!=='approved' && missingDeps(wave).length">Aprueba primero: {{missingDeps(wave).join(', ')}}</small>
       </div>
     </article>
   </div>

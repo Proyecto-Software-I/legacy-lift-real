@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component,inject } from '@angular/core';
+import { MigrationWave } from '../../../core/api/api.service';
 import { WorkspaceFacade } from '../../../core/state/workspace.facade';
 import { ButtonDirective, IconComponent, StatusBadgeComponent } from '../../../shared/ui';
 
@@ -12,4 +13,8 @@ export class MigrationPacksComponent {
     return ({ai:'propuesta por IA',static:'propuesta estática sin IA',manual:'editado a mano'} as Record<string,string>)[origin||''] || 'origen no registrado';
   }
   get hasExecutable():boolean {return !!this.vm.blueprint?.data.waves.some(w=>this.vm.packMatch(w).compatible);}
+  missingDeps(wave:MigrationWave):string[] {
+    const approvals=this.vm.blueprint?.wave_approvals||{};
+    return (wave.depends_on||[]).filter(dep=>approvals[dep]!=='approved');
+  }
 }
