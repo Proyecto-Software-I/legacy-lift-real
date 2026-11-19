@@ -1,4 +1,18 @@
-:host { display:block; min-width:0; }
+:host { display:grid; gap:20px; min-width:0; }
+.delivery { padding: 20px; display: grid; gap: 14px; border-color: var(--color-success-border); }
+.delivery-head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; flex-wrap: wrap; }
+.delivery-head h3 { margin: 0 0 4px; font-size: 17px; }
+.delivery-head p { margin: 0; color: var(--color-text-secondary); font-size: 13.5px; }
+.delivery-score { font-size: 12.5px; font-weight: 650; padding: 3px 10px; border-radius: 999px; border: 1px solid var(--color-success-border); color: var(--color-success); background: var(--color-success-surface); }
+.changed-files { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+.changed-files li { display: flex; align-items: center; gap: 8px; font-size: 13.5px; flex-wrap: wrap; }
+.changed-files li ll-icon { color: var(--color-success); }
+.changed-files li.excluded { opacity: .65; }
+.changed-files li.excluded ll-icon { color: var(--color-muted); }
+.changed-files small { color: var(--color-muted); font-size: 12.5px; }
+.add { color: var(--color-success); } .del { color: var(--color-danger); }
+.delivery-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+@media (max-width: 630px) { .delivery-actions .ll-btn { flex: 1 1 100%; } }
 .artifacts-panel { display: grid; grid-template-columns: 220px minmax(0,1fr); min-height: 420px; overflow: hidden; }
 .artifact-index { border-right: 1px solid var(--color-border); padding: 14px 10px; display: grid; align-content: start; gap: 14px; background: var(--color-panel-subtle); }
 .index-group { display: grid; gap: 1px; }

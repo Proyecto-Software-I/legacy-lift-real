@@ -48,7 +48,7 @@ export class ProjectDashboardComponent {
     {id:'verify',label:'Verify',icon:'verified',group:'Modernizar',title:'Verify · decisión',
       summary:'Compara original y candidato, y decide si aceptas el resultado.'},
     {id:'evidence',label:'Entregables',icon:'folder_open',group:'Entregar',title:'Entregables',
-      summary:'Documentación y evidencia generadas en cada paso, listas para descargar.'}
+      summary:'El proyecto modernizado y la evidencia de cada paso, listos para descargar.'}
   ] as const;
 
   readonly groups = ['Entender', 'Planificar', 'Modernizar', 'Entregar'];

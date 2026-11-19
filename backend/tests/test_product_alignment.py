@@ -131,3 +131,23 @@ def test_baseline_records_verification_gaps():
     gaps = baseline.gaps([], {'status': 'not_run'}, False, [])
     assert any('No se detectó ninguna suite' in g for g in gaps)
     assert any('no fue autorizada' in g for g in gaps)
+
+
+# §2.6 — the approved delivery contains the modernized project, its evidence and the documentation.
+def test_approved_export_is_complete_delivery(client):
+    import io, zipfile
+    from test_s4_review import prepared
+    from app import migration_verify
+    pid, aid = prepared(client)
+    assert client.post(f'/api/projects/{pid}/phases/verify', headers=headers()).status_code == 200
+    migration_verify.run_one()
+    decision = client.post(f'/api/projects/{pid}/migration/decision', headers=headers(),
+                           json={'approved': True, 'reason': 'Aceptamos el riesgo: no hay pruebas comparables ejecutadas.'})
+    assert decision.status_code == 200, decision.text
+    response = client.get(f'/api/projects/{pid}/export', headers=headers())
+    assert response.status_code == 200
+    assert 'legacylift-entrega-completa.zip' in response.headers['content-disposition']
+    names = zipfile.ZipFile(io.BytesIO(response.content)).namelist()
+    assert any(n.startswith('codigo-modernizado/') and n.endswith('calculator.py') for n in names)
+    assert {'evidencias/changes.patch', 'evidencias/report.md', 'evidencias/verify.json'} <= set(names)
+    assert {'documentacion/inventory.md', 'documentacion/blueprint.md', 'documentacion/verification.md'} <= set(names)

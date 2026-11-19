@@ -11,7 +11,7 @@
         <label class="field"><span>Objetivo</span><input class="input" [ngModel]="wave.goal" (ngModelChange)="changeWave(i,'goal',$event)"/></label>
         <div class="inline-fields">
           <label class="field"><span>Estrategia propuesta</span><select class="input" [ngModel]="wave.strategy" (ngModelChange)="changeStrategy(i,$event)">
-            <option *ngFor="let s of strategies" [value]="s">{{s}}{{s==='Refactor' ? ' (ejecutable)' : ''}}</option>
+            <option *ngFor="let s of strategies" [value]="s">{{s}}{{vm.executableStrategies.includes(s) ? ' (ejecutable)' : ''}}</option>
           </select></label>
           <label class="field"><span>Prioridad</span><select class="input" [ngModel]="wave.priority" (ngModelChange)="changePriority(i,$event)">
             <option value="1">Alta</option><option value="2">Media</option><option value="3">Baja</option>

@@ -43,7 +43,8 @@ export interface MigrationReviewSummary {attempt_id:string;files:MigrationReview
   selected_count:number;added:number;removed:number;explanation:string;selection_level:string;}
 export interface ConfidenceFactor {id:string;label:string;points:number;max:number;detail:string;}
 export interface MigrationVerification {classification:'verified_within_tests'|'partial'|'not_demonstrated'|'divergent';
-  outcome?:'aprobado'|'fallido'|'sin_evidencia';confidence_factors?:ConfidenceFactor[];confidence_note?:string;
+  outcome?:'aprobado'|'fallido'|'sin_evidencia';evidence_kind?:'tests'|'dual_run';hardcoded_lines?:string[];
+  dual_run?:{image?:string;comparison:{program:string;equal:boolean;cobol:string;java:string}[]};confidence_factors?:ConfidenceFactor[];confidence_note?:string;
   coverage?:{changed_files:number;covered_by_tests:number;covered:string[];ratio:number;method?:string};
   lint_before?:{files_linted?:number;warnings?:number};lint_after?:{files_linted?:number;warnings?:number};
   reason:string;limits:string;files_selected:number;reviewed_sha256:string;candidate_sha256?:string;
@@ -53,14 +54,14 @@ export interface MigrationVerification {classification:'verified_within_tests'|'
   test_names_before?:string[];test_names_after?:string[];confidence_score?:number|null;}
 export interface RelatedFinding {source:string;id:string|null;rule:string;severity:string;file:string|null;line:number|null;reason:string;}
 export interface MigrationWave {id:string; goal:string; strategy:string; files:string[]; depends_on:string[];
-  priority:number;risk:string;acceptance_criteria:string;related_findings?:RelatedFinding[];}
+  priority:number;risk:string;acceptance_criteria:string;related_findings?:RelatedFinding[];auto_included?:string[];dual_run_entry?:string[];}
 export interface BlueprintData {schema_version:number;title:string;target_architecture:string;current_architecture?:string;source_snapshot_id:string;
   waves:MigrationWave[]; notes:string;limitations:string;origin?:'ai'|'static'|'manual';}
 export interface BaselineTest {path:string;framework:string;}
 export interface TestProposal {id:string;status:'pending'|'approved'|'rejected';data:{title:string;input:string;expected:string;evidence_file:string;source:string;note:string};}
 export interface BaselinePreflight {ready:boolean;execution_authorized:boolean;worker_mode:string;tests:BaselineTest[];proposals:TestProposal[];}
 export interface MigrationPack {id:string; name:string;status:'available'|'planned';version:string;
-  strategies:string[];languages:string[];validators:string[];description:string;}
+  strategies:string[];languages:string[];validators:string[];description:string;requires_ai?:boolean;}
 export interface PackMatch {id:string;compatible:boolean;reason:string;}
 export interface PackCatalog {packs:MigrationPack[];compatibility:Record<string,PackMatch[]>;}
 export interface Blueprint {id:string;revision:number;status:'draft'|'approved'|'rejected'|'superseded';

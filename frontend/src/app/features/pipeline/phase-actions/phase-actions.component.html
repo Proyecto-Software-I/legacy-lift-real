@@ -7,7 +7,9 @@
     <div *ngIf="g.progress !== null && g.progress !== undefined" class="ll-progress" role="progressbar" aria-label="Progreso"
       [attr.aria-valuenow]="g.progress" aria-valuemin="0" aria-valuemax="100"><span [style.width.%]="g.progress"></span></div>
   </div>
-  <div class="next-actions" *ngIf="g.primary || g.rerun">
+  <div class="next-actions" *ngIf="g.primary || g.rerun || g.secondary">
+    <button *ngIf="g.secondary as b" llButton variant="secondary" type="button" (click)="act(b)" [disabled]="!!b.disabled">
+      <ll-icon [name]="b.icon" size="sm"/> {{b.label}}</button>
     <button *ngIf="g.rerun" llButton variant="ghost" size="sm" type="button" (click)="vm.run()"
       [disabled]="!vm.stageRunnable || vm.busy || vm.ingestRunning" title="Genera de nuevo el resultado de este paso">
       <ll-icon name="refresh" size="sm"/> Volver a ejecutar</button>

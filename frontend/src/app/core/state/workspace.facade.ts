@@ -954,16 +954,30 @@ export class WorkspaceFacade {
   updateBlueprintDraft(data:BlueprintData):void {
     this.blueprintDraft={...data,waves:data.waves.map(w=>({...w,files:[...w.files],depends_on:[...w.depends_on]}))};
   }
-  /** Packs that can actually run today, used to offer a one-step fix for blocked waves. */
+  /** Packs that can actually run today for this project's provider. */
   get executableStrategies():string[] {
-    return [...new Set((this.packs?.packs||[]).filter(p=>p.status==='available').flatMap(p=>p.strategies))];
+    const demo=this.selected?.provider==='demo';
+    return [...new Set((this.packs?.packs||[]).filter(p=>p.status==='available' && !(p.requires_ai && demo)).flatMap(p=>p.strategies))];
   }
-  /** A wave blocked only by its strategy can be unblocked by switching to an executable one.
-   * Returns the strategy to offer, or null when the block has another cause (language, size…). */
+  /** Executable strategies whose pack supports every language in the wave (current one excluded). */
+  strategyOptions(wave:MigrationWave):string[] {
+    const langs=new Set(wave.files.map(f=>this.sourceFiles.find(x=>x.path===f)?.language || 'Otro'));
+    const demo=this.selected?.provider==='demo';
+    const packs=(this.packs?.packs||[]).filter(p=>p.status==='available' && !(p.requires_ai && demo) && [...langs].every(l=>p.languages.includes(l)));
+    // Language migration first: it is the pack's distinctive transformation when available.
+    const order=(s:string)=>s==='LanguageMigration'?0:1;
+    // Translation needs real programs, not only copybooks.
+    const hasProgram=wave.files.some(f=>/\.(cbl|cob|cobol)$/i.test(f));
+    return [...new Set(packs.flatMap(p=>p.strategies))]
+      .filter(s=>s!==wave.strategy && (s!=='LanguageMigration' || hasProgram)).sort((a,b)=>order(a)-order(b));
+  }
+  /** A wave blocked only by its strategy can be unblocked by switching to an executable one. */
   strategyFix(wave:MigrationWave):string|null {
-    const reason=(this.packs?.compatibility?.[wave.id]||[]).find(m=>m.reason)?.reason||'';
-    if(this.packMatch(wave).compatible || !/estrategia/i.test(reason)) return null;
-    return this.executableStrategies[0] || null;
+    if(this.packMatch(wave).compatible) return null;
+    return this.strategyOptions(wave)[0] || null;
+  }
+  strategyLabel(strategy:string):string {
+    return ({LanguageMigration:'Migrar COBOL a Java',Refactor:'Refactor en el mismo lenguaje'} as Record<string,string>)[strategy] || strategy;
   }
   /** Saves a new Blueprint revision with the wave's strategy replaced. Approvals reset,
    * exactly as a manual edit would; the person still approves plan and wave explicitly. */
@@ -1068,7 +1082,8 @@ export class WorkspaceFacade {
     this.api.export(this.selected.id).subscribe({next: blob=>{
       this.downloading=null;
       const url=URL.createObjectURL(blob);
-      const el=document.createElement('a');el.href=url;el.download='legacylift-evidencias.zip';el.click();
+      const name=this.selected?.migration_decision==='approved'?'legacylift-entrega-completa.zip':'legacylift-evidencias.zip';
+      const el=document.createElement('a');el.href=url;el.download=name;el.click();
       setTimeout(()=>URL.revokeObjectURL(url),1000);
     }, error:e=>this.showError(e)});
   }

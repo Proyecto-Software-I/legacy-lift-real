@@ -76,6 +76,22 @@ def _default_current_architecture(pid: str) -> str:
     return text[:2500]
 
 
+def _with_called_subprograms(pid: str, files: list[str]) -> tuple[list[str],list[str]]:
+    """A translated COBOL program needs the programs it CALLs: include them (transitively)."""
+    from . import cobol_java
+    source=workspace.project_source(pid)
+    cobol=[x.relative_to(source).as_posix() for x in source.rglob('*') if x.is_file() and x.suffix.lower() in cobol_java.COBOL_SUFFIXES]
+    by_id={p['program_id']:p for p in cobol_java.programs(source,cobol)}
+    by_file={p['file']:p for p in by_id.values()}
+    result=list(files);queue=[f for f in files if f in by_file];added=[]
+    while queue:
+        for callee in by_file[queue.pop()]['calls']:
+            target=by_id.get(callee)
+            if target and target['file'] not in result:
+                result.append(target['file']);added.append(target['file']);queue.append(target['file'])
+    return result,added
+
+
 def _related_findings(pid: str, files: list[str]) -> list[dict]:
     """Deterministic link between a wave and the Discover/Assess evidence on its files."""
     sid=db.project_get(pid)['active_snapshot_id']
@@ -116,6 +132,12 @@ def validate(pid: str, data: dict) -> dict:
             raise ValueError(f'Dependencias inválidas o cíclicas en {wid}; waves deben estar en orden topológico')
         strategy=wave.get('strategy')
         if strategy not in STRATEGIES:raise ValueError(f'Estrategia no soportada: {strategy}')
+        auto_included=[];entry=None
+        if strategy=='LanguageMigration':
+            scope,auto_included=_with_called_subprograms(pid,list(scope))
+            from . import cobol_java
+            entry=[p['program_id'] for p in cobol_java.programs(workspace.project_source(pid),scope) if p['main']]
+            if len(scope)>5:raise ValueError(f'La wave {wid} y los subprogramas que llama superan cinco archivos')
         normalized={}
         for key, limit in (('goal', 1200), ('acceptance_criteria', 2000), ('risk', 1200)):
             value=_text_value(wave.get(key))
@@ -128,7 +150,9 @@ def validate(pid: str, data: dict) -> dict:
         out.append({'id':wid,'goal':normalized['goal'],'strategy':strategy,'files':scope,
                     'depends_on':deps,'priority':priority,'risk':normalized['risk'],
                     'acceptance_criteria':normalized['acceptance_criteria'],
-                    'related_findings':_related_findings(pid,scope)})
+                    'related_findings':_related_findings(pid,scope),
+                    **({'auto_included':auto_included} if auto_included else {}),
+                    **({'dual_run_entry':entry} if entry is not None else {})})
     notes=_text_value(data.get('notes',''), '\n')
     return {'schema_version':2,'title':name,'current_architecture':current_arch[:2500],'target_architecture':target,
             'source_snapshot_id':db.project_get(pid)['active_snapshot_id'],
@@ -267,6 +291,14 @@ def wave_decision(pid: str, wid: str, uid: str, approved: bool) -> dict:
         for prerequisite in wave['depends_on']:
             if plan['wave_approvals'].get(prerequisite)!='approved':
                 raise ValueError(f'Primero aprueba la wave dependiente {prerequisite}')
+        if wave['strategy']=='Keep':
+            # "Keep" changes nothing: approving it acknowledges the decision and unblocks its
+            # dependants, but it never becomes the executable (active) wave.
+            with db.connect() as conn:
+                conn.execute("INSERT INTO blueprint_wave_approvals(blueprint_id,wave_id,status,user_id,decided_at) VALUES(?,?,?,?,?) ON CONFLICT(blueprint_id,wave_id) DO UPDATE SET status=excluded.status,user_id=excluded.user_id,decided_at=excluded.decided_at",
+                             (plan['id'],wid,'approved',uid,db.now()))
+            db.project_event(pid,'wave',{'id':wid,'status':'approved','revision':plan['revision'],'keep':True})
+            return current(pid)
         matches=[x for x in migration_packs.compatible(pid,wave) if x['compatible']]
         if not matches:raise ValueError('La wave no tiene un Migration Pack ejecutable compatible')
         pack=matches[0]['id']

@@ -59,9 +59,11 @@ def selected_diff(pid:str,aid:str) -> str:
     parts=[]
     for f in migration_review.summary(pid,aid)['files']:
         if not f['selected']:continue
-        name=f['path'];before=(original/name).read_text(encoding='utf-8',errors='replace').splitlines(keepends=True)
+        name=f['path'];is_new=not (original/name).exists()
+        before=[] if is_new else (original/name).read_text(encoding='utf-8',errors='replace').splitlines(keepends=True)
         after=(reviewed/name).read_text(encoding='utf-8',errors='replace').splitlines(keepends=True)
-        body=''.join(difflib.unified_diff(before,after,fromfile='a/'+name,tofile='b/'+name))
+        body=''.join(difflib.unified_diff(before,after,fromfile='/dev/null' if is_new else 'a/'+name,tofile='b/'+name))
+        if is_new:body='new file mode 100644\n'+body
         parts.append('diff --git a/'+name+' b/'+name+'\n'+body)
     return ''.join(parts)
 
@@ -98,7 +100,8 @@ def decide(pid:str,uid:str,approved:bool,reason:str='') -> dict:
     return migration_runs.get(pid,a['id'])
 
 
-def export(pid:str,fmt:str='zip') -> tuple[bytes,str,str]:
+def export(pid:str,fmt:str='zip',include_docs:bool=False) -> tuple[bytes,str,str]:
+    """Approved delivery. include_docs adds every analysis/plan artifact under documentacion/."""
     a=_latest(pid)
     if a.get('decision')!='approved':raise ValueError('Aprueba explícitamente el candidato antes de exportar')
     reviewed=migration_review.reviewed_path(pid,a['id'])
@@ -122,4 +125,10 @@ def export(pid:str,fmt:str='zip') -> tuple[bytes,str,str]:
             'wave_id':a['wave_id'],'source_hash':a['source_hash'],'reviewed_hash':a['reviewed_sha256'],
             'classification':a['verification']['classification'],
             'decision':'approved','decision_reason':a['result'].get('decision_reason','')},ensure_ascii=False,indent=2))
+        if include_docs:
+            for doc in sorted(workspace.artifact_dir(pid).glob('*')):
+                if doc.is_file() and not doc.is_symlink() and doc.name in workspace.ARTIFACT_NAMES:
+                    z.write(doc,'documentacion/'+doc.name)
+    if include_docs:
+        return output.getvalue(),'application/zip','legacylift-entrega-completa.zip'
     return output.getvalue(),'application/zip','legacylift-entrega.zip'

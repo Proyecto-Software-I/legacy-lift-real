@@ -13,7 +13,7 @@ from typing import Any
 
 from . import ai, db, inspection, workspace
 from .analysis import context as analysis_context, understanding, assessment
-from . import planning, migration_packs, baseline
+from . import planning, migration_packs, baseline, cobol_java
 
 STAGES = ('discover', 'understand', 'assess', 'plan', 'baseline', 'modernize', 'verify')
 PREVIOUS = {'discover': None, 'understand': 'discover', 'assess': 'understand',
@@ -27,11 +27,18 @@ PHASE_ARTIFACT = {'discover':'inventory.md', 'understand':'understand.md', 'asse
                   'plan':'blueprint.md', 'baseline':'baseline.md', 'modernize':'migration.md', 'verify':'verification.md'}
 
 
+def active_pack_id(pid: str) -> str | None:
+    wave = planning.executable_wave(pid)
+    pack = migration_packs.selected_pack(pid, wave) if wave else None
+    return pack['id'] if pack else None
+
+
 def model_for_phase(phase: str, provider: str) -> str:
     return ai.model_for(provider) if phase in AI_PHASES else ai.DETERMINISTIC_ENGINE
 
 
-def template_version(phase: str) -> str:
+def template_version(phase: str, template: str | None = None) -> str:
+    phase = template or phase
     file = PROMPT_DIR / f'{phase}.md'
     if not file.is_file():
         return 'sin plantilla (fase determinista)'
@@ -40,13 +47,13 @@ def template_version(phase: str) -> str:
     return f'{phase}.md {match.group(2)}' if match else f'{phase}.md'
 
 
-def provenance(pid: str, phase: str, provider: str, prompt_hash: str = '', data: dict | None = None) -> dict:
+def provenance(pid: str, phase: str, provider: str, prompt_hash: str = '', data: dict | None = None, template: str | None = None) -> dict:
     """Which provider, model, template and snapshot produced an artifact (product §9)."""
     project = db.project_get(pid) or {}
     engine = (data or {}).get('engine')
     return {'phase': phase, 'provider': provider, 'model': model_for_phase(phase, provider),
             'engine': engine or model_for_phase(phase, provider), 'fallback': bool(engine),
-            'prompt_template': template_version(phase) if phase in AI_PHASES and provider in ai.AI_PROVIDERS else 'sin prompt (determinista)',
+            'prompt_template': template_version(phase, template) if phase in AI_PHASES and provider in ai.AI_PROVIDERS else 'sin prompt (determinista)',
             'prompt_hash': prompt_hash or None, 'snapshot_id': project.get('active_snapshot_id'),
             'source_hash': project.get('snapshot_hash'), 'recorded_at': db.now()}
 
@@ -107,6 +114,9 @@ def artifact(pid: str, name: str) -> str:
 
 
 def prompt_for(phase: str, pid: str) -> tuple[str, str]:
+    if phase == 'modernize' and active_pack_id(pid) == cobol_java.PACK_ID:
+        prompt, _ = cobol_java.build_prompt(workspace.project_source(pid), planning.executable_wave(pid))
+        return prompt, hashlib.sha256(cobol_java.PROMPT.read_bytes()).hexdigest()[:16]
     template_file = PROMPT_DIR / f'{phase}.md'
     template = template_file.read_text(encoding='utf-8') if template_file.exists() else ''
     inventory = artifact(pid, 'inventory.md')
@@ -217,10 +227,20 @@ def _baseline_md(result: dict) -> str:
     return baseline.markdown(result)
 
 
-def _validate_changed_paths(pid: str) -> list[str]:
+def _validate_changed_paths(pid: str, language_migration: bool = False) -> list[str]:
     original, candidate = workspace.project_source(pid), workspace.project_candidate(pid)
     before = {f.relative_to(original) for f in original.rglob('*') if f.is_file() and not f.is_symlink()}
     after = {f.relative_to(candidate) for f in candidate.rglob('*') if f.is_file() and not f.is_symlink()}
+    if language_migration:
+        # Language migration only ADDS files under the pack's Java root; originals stay identical.
+        if any(f.is_symlink() for f in candidate.rglob('*')) or not before <= after:
+            raise ValueError('La migración eliminó archivos o creó enlaces; candidato descartado')
+        if any((original / p).read_bytes() != (candidate / p).read_bytes() for p in before):
+            raise ValueError('La migración modificó archivos originales; candidato descartado')
+        added = sorted(p.as_posix() for p in after - before)
+        if not added or any(not a.startswith(cobol_java.JAVA_ROOT + '/') or not a.endswith('.java') for a in added):
+            raise ValueError(f'Solo se permiten archivos Java nuevos en {cobol_java.JAVA_ROOT}/')
+        return added
     changed = [p for p in before & after if (original / p).read_bytes() != (candidate / p).read_bytes()]
     # New/deleted files, symlinks and modification of tests or config are denied in MVP.
     if before != after or any(f.is_symlink() for f in candidate.rglob('*')):
@@ -257,6 +277,44 @@ def _apply_claude_changes(pid: str, content: str) -> None:
         raise ValueError('Claude devolvió rutas duplicadas')
     for target, content in paths:
         target.write_text(content, encoding='utf-8')
+
+
+def _modernize_cobol_java(pid: str, provider: str, candidate: Path) -> tuple[str, dict]:
+    """cobol-to-java@1.0: the model proposes Java classes; LegacyLift validates and compiles them."""
+    if provider not in ai.AI_PROVIDERS:
+        raise ValueError('El pack cobol-to-java requiere un proveedor de IA (Codex, Gemini o Claude).')
+    wave = planning.executable_wave(pid)
+    prompt, progs = cobol_java.build_prompt(candidate, wave)
+    try:
+        if provider in ai.LOCAL_AGENTS:
+            with analysis_context.scoped_workspace(pid, candidate) as isolated:
+                response = ai.generate(provider, prompt, isolated)
+        else:
+            response = ai.generate(provider, prompt, candidate)
+    except ai.AIError as exc:
+        # No deterministic fallback: a translation must come from the model or not exist.
+        raise ValueError(('Cuota del proveedor de IA agotada; ' if ai.is_quota_error(exc) else '') + str(exc)) from exc
+    written = cobol_java.apply(candidate, response, progs)
+    build = cobol_java.compile_java(candidate)
+    if build['status'] == 'failed':
+        raise ValueError('El Java generado no compila; candidato descartado.\n' + build.get('output', '')[-3000:])
+    added = _validate_changed_paths(pid, language_migration=True)
+    diff, count = workspace.diff_candidate(pid)
+    workspace.save_artifact(pid, 'changes.patch', diff)
+    from .analysis.understanding import _json_object
+    notes = str((_json_object(response) or {}).get('notes') or '')[:6000]
+    result = {'modified_files': added, 'pack': cobol_java.PACK_ID, 'java_build': build,
+              'programs': [{k: p[k] for k in ('program_id', 'file', 'class', 'main')} for p in progs]}
+    prov = provenance(pid, 'modernize', provider, hashlib.sha256(cobol_java.PROMPT.read_bytes()).hexdigest()[:16], result, template='cobol_to_java')
+    lines = ['# Modernize — Migración COBOL a Java (cobol-to-java@1.0)', '',
+             '## Programas traducidos'] + [f"- `{p['program_id']}` ({p['file']}) → `{cobol_java.JAVA_ROOT}/{p['class']}.java`" + (' · principal' if p['main'] else ' · subprograma') for p in progs]
+    lines += ['', '## Archivos Java nuevos'] + [f'- `{x}`' for x in added]
+    lines += ['', '## Compilación', f"- {build.get('compiler', 'javac')}: **{build['status']}**",
+              '', '## Notas del modelo', notes or 'Sin notas.',
+              '', 'El COBOL original se conserva sin cambios. La equivalencia se comprueba en Verify mediante dual run.']
+    workspace.save_artifact(pid, 'migration.md', '\n'.join(lines) + '\n' + provenance_md(prov))
+    db.project_update(pid, migration_decision=None)
+    return f'{len(added)} archivo(s) Java generados y compilados', {**result, 'provenance': prov}
 
 
 def _modernize_demo(pid: str) -> str:
@@ -346,6 +404,12 @@ def perform(pid: str, phase: str, progress=None) -> tuple[str, dict]:
         if provider in ai.AI_PROVIDERS and not db.consent_is_active(pid,project.get('active_snapshot_id'),provider):
             raise ValueError('El proyecto requiere consentimiento para enviar código a IA')
         candidate = workspace.copy_snapshot(pid)
+        if active_pack_id(pid) == cobol_java.PACK_ID:
+            try:
+                return _modernize_cobol_java(pid, provider, candidate)
+            except Exception:
+                workspace.copy_snapshot(pid)
+                raise
         fallback_engine = None
         try:
             if provider == 'demo':

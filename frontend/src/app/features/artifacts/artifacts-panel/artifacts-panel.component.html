@@ -1,3 +1,26 @@
+<section class="panel delivery" *ngIf="vm.selected?.migration_decision==='approved' && vm.latestMigration as attempt" aria-labelledby="delivery-title">
+  <header class="delivery-head">
+    <div>
+      <h3 id="delivery-title">Proyecto modernizado</h3>
+      <p>Copia completa del sistema con los cambios aprobados de <span class="mono">{{attempt.wave_id}}</span>. El código original no se modificó.</p>
+    </div>
+    <span class="delivery-score" *ngIf="attempt.verification?.confidence_score != null">Confidence Score {{attempt.verification?.confidence_score}}/100</span>
+  </header>
+  <ul class="changed-files" *ngIf="vm.migrationReview as review">
+    <li *ngFor="let file of review.files" [class.excluded]="!file.selected">
+      <ll-icon [name]="file.selected ? 'check_circle' : 'remove_circle'" size="sm"/>
+      <span class="mono">{{file.path}}</span>
+      <small>{{file.selected ? 'incluido' : 'excluido'}} · <span class="add">+{{file.added}}</span> <span class="del">−{{file.removed}}</span></small>
+    </li>
+  </ul>
+  <div class="delivery-actions">
+    <button llButton variant="primary" type="button" [disabled]="!!vm.downloading" (click)="vm.download()"><ll-icon name="inventory_2" size="sm"/> {{vm.downloading==='evidence'?'Descargando…':'Paquete completo (código + evidencias)'}}</button>
+    <button llButton variant="secondary" type="button" [disabled]="!!vm.downloading" (click)="vm.downloadMigration('zip')"><ll-icon name="archive" size="sm"/> {{vm.downloading==='zip'?'Descargando…':'Solo código modernizado'}}</button>
+    <button llButton variant="ghost" type="button" [disabled]="!!vm.downloading" (click)="vm.downloadMigration('patch')"><ll-icon name="difference" size="sm"/> {{vm.downloading==='patch'?'Descargando…':'Parche .patch'}}</button>
+    <button llButton variant="ghost" type="button" [disabled]="!!vm.downloading" (click)="vm.downloadMigration('report')"><ll-icon name="description" size="sm"/> {{vm.downloading==='report'?'Descargando…':'Informe'}}</button>
+  </div>
+</section>
+
 <section class="panel artifacts-panel" *ngIf="vm.selected as p" id="artifacts" aria-label="Artefactos generados">
   <nav class="artifact-index" aria-label="Seleccionar artefacto">
     <div class="index-group" *ngFor="let g of groups">
@@ -11,7 +34,7 @@
   <div class="artifact-document" *ngIf="vm.artifactContent; else noArtifact">
     <div class="document-bar"><span class="mono">{{vm.artifactName}}</span>
       <button llButton variant="ghost" size="sm" type="button" (click)="vm.copyArtifact()" [disabled]="!vm.artifactContent"><ll-icon name="content_copy" size="sm"/> Copiar</button>
-      <button llButton variant="ghost" size="sm" type="button" [disabled]="!!vm.downloading" (click)="vm.download()"><ll-icon name="download" size="sm"/> {{vm.downloading==='evidence'?'Descargando…':'Exportar ZIP'}}</button>
+      <button *ngIf="vm.selected?.migration_decision!=='approved'" llButton variant="ghost" size="sm" type="button" [disabled]="!!vm.downloading" (click)="vm.download()"><ll-icon name="download" size="sm"/> {{vm.downloading==='evidence'?'Descargando…':'Exportar ZIP'}}</button>
     </div>
     <div *ngIf="vm.rendered;else plainText" class="markdown-view" [innerHTML]="vm.rendered"></div>
     <ng-template #plainText><pre class="raw-view">{{vm.artifactContent}}</pre></ng-template>

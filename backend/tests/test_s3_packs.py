@@ -24,7 +24,13 @@ def test_wave_requires_plan_and_compatible_pack(client):
     draft=planning.current(pid)
     matches=migration_packs.compatible(pid,draft['data']['waves'][0])
     if not any(m['compatible'] for m in matches):
-        assert client.post(url,headers=headers(),json={'approved':True}).status_code==409
+        response=client.post(url,headers=headers(),json={'approved':True})
+        if draft['data']['waves'][0]['strategy']=='Keep':
+            # Keep is an acknowledgement: approved, but never the executable wave.
+            assert response.status_code==200 and planning.executable_wave(pid) is None
+            assert not pipeline.phase_ready(pid,'baseline')[0]
+        else:
+            assert response.status_code==409
         edited=draft['data'].copy();edited['waves'][0]['strategy']='Refactor'
         assert client.patch(f'/api/projects/{pid}/blueprints/current',headers=headers(),json={'data':edited}).status_code==200
         assert client.post(f'/api/projects/{pid}/plan/decision',headers=headers(),json={'approved':True}).status_code==200

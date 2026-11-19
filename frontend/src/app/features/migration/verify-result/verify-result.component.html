@@ -12,7 +12,7 @@
           <ll-status-badge [status]="v.classification"/>
           <span class="outcome">{{outcomeLabel(v)}}</span>
         </div>
-        <h3>{{verdict(v.classification)}}</h3>
+        <h3>{{v.evidence_kind==='dual_run' && v.classification==='verified_within_tests' ? 'El Java produce exactamente la misma salida que el COBOL' : verdict(v.classification)}}</h3>
         <p>{{v.reason}}</p>
         <div class="score" *ngIf="v.confidence_score!=null">
           <div class="score-head"><span>Migration Confidence Score</span><strong>{{v.confidence_score}}<small>/100</small></strong></div>
@@ -28,6 +28,20 @@
           <div><dt>Archivos verificados</dt><dd>{{v.files_selected}}</dd></div>
         </dl>
       </article>
+
+      <section class="panel dual" *ngIf="v.evidence_kind==='dual_run' && v.dual_run?.comparison?.length" aria-labelledby="dual-title">
+        <h3 id="dual-title">Dual run: COBOL original frente a Java</h3>
+        <p class="muted">Ambos programas se ejecutaron en <code>{{v.dual_run?.image}}</code> sin red y con el código en solo lectura.</p>
+        <div class="dual-row" *ngFor="let row of v.dual_run!.comparison">
+          <div class="dual-head"><strong class="mono">{{row.program}}</strong>
+            <ll-status-badge [status]="row.equal ? 'passed' : 'divergent'" [label]="row.equal ? 'Salida idéntica' : 'Salida distinta'"/></div>
+          <div class="dual-grid">
+            <div><span class="sub-label">COBOL (GnuCOBOL)</span><pre class="verify-log">{{row.cobol || '(sin salida)'}}</pre></div>
+            <div><span class="sub-label">Java 17</span><pre class="verify-log">{{row.java || '(sin salida)'}}</pre></div>
+          </div>
+        </div>
+        <p class="inline-error" *ngIf="v.hardcoded_lines?.length">La salida esperada aparece escrita literalmente en el Java; por eso no cuenta como evidencia.</p>
+      </section>
 
       <!-- 2. The decision, when one is needed -->
       <section id="verify-decision" *ngIf="!attempt.decision" class="panel decision" [class.blocked]="v.classification==='divergent'" aria-labelledby="decision-title">
