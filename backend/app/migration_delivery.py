@@ -27,17 +27,25 @@ def report(pid:str,aid:str) -> str:
     s=migration_review.summary(pid,aid)
     lines=['# Informe de modernización LegacyLift','',f"- Intento: `{aid}`",f"- Snapshot: `{a['snapshot_id']}`",
       f"- Blueprint: `{a['blueprint_id']}` (rev. {a['blueprint_revision']})",f"- Wave: `{a['wave_id']}`",
-      f"- Pack: `{a['pack_id']}`",f"- Decisión: **{a.get('decision') or 'pendiente'}**",'',
+      f"- Pack: `{a['pack_id']}`",f"- Decisión humana: **{ {'approved':'aprobada','rejected':'rechazada'}.get(a.get('decision') or '','pendiente') }**",'',
       '## Cambios incluidos']
     for f in s['files']:
         lines.append(f"- {'INCLUIDO' if f['selected'] else 'EXCLUIDO'} `{f['path']}`: {f['summary']} (+{f['added']}/-{f['removed']})")
         if f['comment']:lines.append('  - Comentario: '+f['comment'].replace('\n',' ')[:200])
-    lines+=['','## Verificación',f"- Clasificación: **{v.get('classification','no ejecutada')}**",
+    outcome={'aprobado':'Aprobado dentro de las pruebas','fallido':'Fallido','sin_evidencia':'Sin evidencia suficiente'}
+    lines+=['','## Verificación',f"- Resultado: **{outcome.get(v.get('outcome'),'no ejecutada')}** (`{v.get('classification','no ejecutada')}`)",
+            f"- Migration Confidence Score (orientativo): {v.get('confidence_score','N/D')}/100",
             f"- Motivo: {v.get('reason','No existen evidencias de Verify para este intento')}",
             f"- Límite: {v.get('limits','No se puede afirmar equivalencia sin pruebas comparables')}"]
     if a.get('result',{}).get('decision_reason'):
         lines += ['', '## Justificación humana', a['result']['decision_reason']]
+    for factor in v.get('confidence_factors') or []:
+        lines.append(f"  - {factor['label']}: {factor['points']}/{factor['max']} — {factor['detail']}")
     if a.get('result'):lines += ['', '## Archivos', str(a['result'].get('modified_files',[]))]
+    prov=(a.get('result') or {}).get('provenance') or {}
+    if prov:
+        lines += ['', '## Procedencia del candidato', f"- Proveedor `{prov.get('provider')}` · modelo `{prov.get('model')}` · plantilla `{prov.get('prompt_template')}`",
+                  f"- Motor realmente usado: {prov.get('engine')}"]
     return '\n'.join(lines)+'\n'
 
 
@@ -62,12 +70,7 @@ def decide(pid:str,uid:str,approved:bool,reason:str='') -> dict:
     a=_latest(pid)
     v=a.get('verification') or {};classification=v.get('classification')
     if a.get('decision'):
-        if a.get('decision')=='approved' and approved and classification=='verified_within_tests':
-            return migration_runs.get(pid,a['id'])
-        if a.get('decision')=='approved' and not approved and classification=='verified_within_tests':
-            pass
-        else:
-            raise ValueError('El intento ya tiene una decisión irreversible')
+        raise ValueError('El intento ya tiene una decisión registrada')
     if a.get('verify_status')!='completed' or not a.get('verification') or not a.get('reviewed_sha256'):
         raise ValueError('Antes de decidir ejecuta Verify sobre los archivos seleccionados')
     if approved and classification=='divergent':
@@ -83,7 +86,7 @@ def decide(pid:str,uid:str,approved:bool,reason:str='') -> dict:
         raise ValueError('Cambió la fuente original desde la verificación')
     with db.connect() as conn:
         cur=conn.execute("""UPDATE migration_attempts SET decision=?,decided_at=?,decided_by=?,result_json=?
-          WHERE id=? AND (decision IS NULL OR decision='approved') AND verify_status='completed' """,
+          WHERE id=? AND decision IS NULL AND verify_status='completed' """,
           ('approved' if approved else 'rejected',db.now(),uid,
            json.dumps({**a['result'],'decision_reason':reason.strip()},ensure_ascii=False),a['id']))
         if not cur.rowcount:raise ValueError('La decisión ya fue registrada')

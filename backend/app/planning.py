@@ -9,10 +9,13 @@ import json
 import uuid
 from pathlib import Path
 from typing import Any
-from . import db, workspace
+from . import ai, db, workspace
 
 SUPPORTED = {'Python', 'JavaScript', 'TypeScript', 'Java', 'C#', 'Go'}
-STRATEGIES = {'Keep', 'Stabilize', 'Encapsulate', 'Refactor', 'Rewrite', 'LanguageMigration'}
+# Product §3 vocabulary. Only strategies implemented by an available Migration Pack can execute.
+STRATEGIES = {'Keep', 'Stabilize', 'Encapsulate', 'Rehost', 'Replatform', 'Refactor', 'Rearchitect',
+              'Rewrite', 'Replace', 'Retire', 'LanguageMigration'}
+ORIGINS = {'ai', 'static', 'manual'}
 
 
 def current(pid: str) -> dict | None:
@@ -61,10 +64,41 @@ def _text_value(value: object, joiner: str = '; ') -> str | None:
     return None
 
 
+def _default_current_architecture(pid: str) -> str:
+    sid=db.project_get(pid)['active_snapshot_id']
+    knowledge=db.analysis_get(pid,sid,'understand') or {}
+    inv=db.analysis_get(pid,sid,'discover') or {}
+    modules=', '.join(f"{n['label']} ({n.get('files',0)} archivos)" for n in inv.get('graph',{}).get('nodes',[])[:12]) or 'sin módulos detectados'
+    deps=len(inv.get('graph',{}).get('edges',[]))
+    summary=str(knowledge.get('summary') or '').strip()
+    text=f'Módulos observados: {modules}. Dependencias locales entre módulos: {deps}.'
+    if summary: text+=' Resumen de Understand: '+summary[:1500]
+    return text[:2500]
+
+
+def _related_findings(pid: str, files: list[str]) -> list[dict]:
+    """Deterministic link between a wave and the Discover/Assess evidence on its files."""
+    sid=db.project_get(pid)['active_snapshot_id']
+    inv=db.analysis_get(pid,sid,'discover') or {}
+    assessed=db.analysis_get(pid,sid,'assess') or {}
+    scope=set(files)
+    modules={x['module'] for x in inv.get('file_index',[]) if x['path'] in scope}
+    out=[{'source':'discover','id':f['id'],'rule':f['rule'],'severity':f['severity'],'file':f['file'],
+          'line':f.get('line'),'reason':f['reason']} for f in inv.get('findings',[]) if f.get('file') in scope]
+    for item in list(assessed.get('recommendations',[]))+list(assessed.get('ai_suggestions',[])):
+        if isinstance(item,dict) and item.get('module') in modules:
+            out.append({'source':'assess' if item.get('source')=='static_heuristic' else 'assess-ia','id':item.get('id'),
+                        'rule':'STRATEGY:'+str(item.get('strategy')),'severity':'info','file':None,'line':None,
+                        'reason':f"{item.get('module')}: {item.get('strategy')} — {str(item.get('reason',''))[:240]}"})
+    return out[:12]
+
+
 def validate(pid: str, data: dict) -> dict:
     if not isinstance(data,dict): raise ValueError('Blueprint debe ser un objeto JSON')
     name=_text_value(data.get('title'), ' ')
     target=_text_value(data.get('target_architecture'), '\n')
+    current_arch=_text_value(data.get('current_architecture'), '\n')
+    if not current_arch or len(current_arch)<10: current_arch=_default_current_architecture(pid)
     waves=data.get('waves')
     if not name or not 3<=len(name)<=140:raise ValueError('Título inválido')
     if not target or not 10<=len(target)<=2500:raise ValueError('Arquitectura objetivo inválida')
@@ -93,18 +127,22 @@ def validate(pid: str, data: dict) -> dict:
         if isinstance(priority,bool) or not isinstance(priority,int) or priority not in (1,2,3):raise ValueError('Prioridad debe ser 1, 2 o 3')
         out.append({'id':wid,'goal':normalized['goal'],'strategy':strategy,'files':scope,
                     'depends_on':deps,'priority':priority,'risk':normalized['risk'],
-                    'acceptance_criteria':normalized['acceptance_criteria']})
+                    'acceptance_criteria':normalized['acceptance_criteria'],
+                    'related_findings':_related_findings(pid,scope)})
     notes=_text_value(data.get('notes',''), '\n')
-    return {'schema_version':1,'title':name,'target_architecture':target,
+    return {'schema_version':2,'title':name,'current_architecture':current_arch[:2500],'target_architecture':target,
             'source_snapshot_id':db.project_get(pid)['active_snapshot_id'],
             'waves':out,'notes':(notes if notes is not None else str(data.get('notes','')))[:2000],
             'limitations':'Las waves son propuestas. Un pack y aprobación humana determinan ejecutabilidad.'}
 
 
-def save_revision(pid: str, payload: dict) -> dict:
+def save_revision(pid: str, payload: dict, origin: str = 'manual') -> dict:
     project=db.project_get(pid)
     if not project or not project.get('active_snapshot_id'):raise ValueError('Importa un snapshot antes de planificar')
     data=validate(pid,payload)
+    # Origin is decided server-side; a client edit can never claim to be an AI proposal.
+    data['origin']=origin if origin in ORIGINS else 'manual'
+    data['ai_generated']=data['origin']=='ai'
     with db.connect() as conn:
         last=conn.execute('SELECT MAX(revision) AS r FROM modernization_blueprints WHERE project_id=? AND snapshot_id=?',
                           (pid,project['active_snapshot_id'])).fetchone()
@@ -125,18 +163,23 @@ def save_revision(pid: str, payload: dict) -> dict:
 
 def _artifacts(pid: str, data: dict, revision: int) -> None:
     workspace.save_artifact(pid,'blueprint.json',json.dumps({'revision':revision,**data},ensure_ascii=False,indent=2))
-    lines=['# '+data['title'],'','Blueprint revisión '+str(revision),'','## Arquitectura objetivo',data['target_architecture'],'','## Waves']
+    origin={'ai':'propuesta de IA validada contra el snapshot','static':'planificador estático determinista','manual':'edición humana'}.get(data.get('origin','manual'))
+    lines=['# '+data['title'],'','Blueprint revisión '+str(revision)+' · origen: '+str(origin),'',
+           '## Arquitectura actual',data.get('current_architecture',''),'','## Arquitectura objetivo',data['target_architecture'],'','## Waves']
     for w in data['waves']:
         lines += ['','### '+w['id']+' — '+w['goal'],f"- Estrategia: {w['strategy']}",
                   '- Archivos: '+', '.join('`'+f+'`' for f in w['files']),
                   '- Dependencias: '+(', '.join(w['depends_on']) or 'ninguna'),
                   '- Prioridad: '+str(w['priority']),'- Riesgo: '+w['risk'],
                   '- Aceptación: '+w['acceptance_criteria']]
+        related=w.get('related_findings') or []
+        lines.append('- Hallazgos vinculados: '+('; '.join(f"{x['rule']} {('`'+x['file']+(':'+str(x['line']) if x.get('line') else '')+'`') if x.get('file') else ''} ({x['source']})" for x in related) if related else 'ninguno registrado'))
+    if data.get('notes'): lines += ['','## Notas y límites',data['notes']]
     lines += ['','**Importante:** no se ha autorizado ni ejecutado ninguna modificación.']
     workspace.save_artifact(pid,'blueprint.md','\n'.join(lines)+'\n')
 
 
-def proposal(pid: str, notes: str = '', provider: str = 'demo') -> dict:
+def proposal(pid: str, notes: str = '', provider: str = 'demo', ai_unavailable: bool = False) -> dict:
     """Prefer validated structured AI recommendations; otherwise fall back to safe static draft.
 
     No model output, regardless of provider, can authorize execution or name files
@@ -168,7 +211,7 @@ def proposal(pid: str, notes: str = '', provider: str = 'demo') -> dict:
                           'acceptance_criteria':'Comparar diff y resultados con el baseline antes de aprobar.'})
             if len(waves)>=30:break
         if len(waves)>=30:break
-    if provider in {'claude','codex'}:
+    if provider in ai.AI_PROVIDERS:
         from .analysis.understanding import _json_object
         # The parser requires valid structured data, not a prose summary that we guess about.
         # AI can propose multiple waves and migration strategies, but validate() checks paths.
@@ -178,15 +221,19 @@ def proposal(pid: str, notes: str = '', provider: str = 'demo') -> dict:
             try:
                 ai_notes=_text_value(parsed.get('notes',''), '\n') or ''
                 parsed['notes']=('Propuesta generada por IA, pendiente de aprobación humana.' + (f'\n{ai_notes}' if ai_notes else ''))[:2000]
-                return save_revision(pid,parsed)
+                return save_revision(pid,parsed,origin='ai')
             except (ValueError,TypeError) as exc:
                 failure_reason=str(exc)[:180]
-        notes=f'La IA no entregó un Blueprint JSON validable ({failure_reason}); se generó un plan estático para edición manual.'
+        if ai_unavailable:
+            notes='La cuota del proveedor de IA estaba agotada; este Blueprint lo generó el planificador estático, no un modelo. Reintenta Plan cuando se renueve la cuota.'
+        else:
+            notes=f'La IA no entregó un Blueprint JSON validable ({failure_reason}); se generó un plan estático para edición manual.'
     else:
         notes='Propuesta estática, sin inferencias de IA. Requiere revisión humana.'
     return save_revision(pid,{'title':'Modernization Blueprint — '+project['name'],
+      'current_architecture':_default_current_architecture(pid),
       'target_architecture':'Mantener contratos externos y modularizar gradualmente. Las estrategias y las dependencias son propuestas iniciales revisables, no decisiones de IA verificadas.',
-      'waves':waves,'notes':notes})
+      'waves':waves,'notes':notes},origin='static')
 
 
 def decide(pid: str, uid: str, approved: bool) -> dict:

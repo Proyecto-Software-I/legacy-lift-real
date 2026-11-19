@@ -1,8 +1,9 @@
 """End-to-end acceptance: HTTP -> import -> analysis -> plan -> worker -> verify -> ZIP.
 
 No backend functions are called in-process and no AI provider is mocked. The demo
-runs on every CI build. Set E2E_AI_PROVIDER=codex or claude explicitly to run
-a second, real-model journey using the host's Codex login or Anthropic API key.
+runs on every CI build. Set E2E_AI_PROVIDER=codex, gemini or claude explicitly to run
+a second, real-model journey using the host's Codex login, Google login (Antigravity CLI)
+or Anthropic API key.
 """
 from __future__ import annotations
 
@@ -81,11 +82,12 @@ def worker_once(system, phase):
 
 
 def model_ready(client, provider):
-    assert provider in ("codex", "claude"), "E2E_AI_PROVIDER debe ser codex o claude"
+    assert provider in ("codex", "gemini", "claude"), "E2E_AI_PROVIDER debe ser codex, gemini o claude"
     available = {p["id"]: p for p in call(client, "GET", "/api/providers").json()}
     assert available.get(provider, {}).get("ready"), (
         f"{provider} no está configurado en el backend. "
-        "Codex exige CLI + codex login; Claude exige CLAUDE_API_KEY (no basta su suscripción)."
+        "Codex exige CLI + codex login; Gemini exige Antigravity CLI (agy) con sesión de Google; "
+        "Claude exige CLAUDE_API_KEY (no basta su suscripción)."
     )
 
 
@@ -225,14 +227,16 @@ def test_demo_full_journey(e2e_client, e2e_server):
 
 
 @pytest.mark.skipif(not os.getenv("E2E_AI_PROVIDER"),
-                    reason="IA real opt-in: configura E2E_AI_PROVIDER=codex o claude")
+                    reason="IA real opt-in: configura E2E_AI_PROVIDER=codex, gemini o claude")
 def test_real_ai_full_journey(e2e_client, e2e_server):
     provider = os.environ["E2E_AI_PROVIDER"].lower().strip()
     if provider == "codex":
         assert shutil.which(os.getenv("CODEX_BIN", "codex")), "Instala Codex CLI y ejecuta codex login"
+    elif provider == "gemini":
+        assert shutil.which(os.getenv("GEMINI_BIN", "agy")), "Instala Antigravity CLI (agy) e inicia sesión con Google"
     elif provider == "claude":
         assert os.getenv("CLAUDE_API_KEY"), "Configura CLAUDE_API_KEY"
     else:
-        pytest.fail("E2E_AI_PROVIDER debe ser codex o claude")
+        pytest.fail("E2E_AI_PROVIDER debe ser codex, gemini o claude")
     result = full_journey(e2e_client, e2e_server, provider)
     assert result["provider"] == provider

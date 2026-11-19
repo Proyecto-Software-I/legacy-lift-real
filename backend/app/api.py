@@ -71,7 +71,7 @@ class NewProject(BaseModel):
     organization_id: str | None = None
     name: str = Field(min_length=3, max_length=80)
     system_name: str = Field(min_length=2, max_length=80)
-    provider: str = Field(pattern='^(codex|claude|demo)$')
+    provider: str = Field(pattern='^(codex|gemini|claude|demo)$')
 
 
 def public_job(job: dict) -> dict:

@@ -9,7 +9,7 @@ import os
 import shutil
 import uuid
 from pathlib import Path
-from . import db, planning, migration_packs, pipeline, workspace
+from . import ai, db, planning, migration_packs, pipeline, workspace
 
 
 def _limit() -> int:
@@ -56,7 +56,7 @@ def _scope(pid: str) -> tuple[dict,dict,dict,dict]:
         raise ValueError('Primero aprueba un Blueprint y una wave ejecutable')
     pack=migration_packs.selected_pack(pid,wave)
     if not pack or pack['status']!='available':raise ValueError('Migration Pack incompatible')
-    if project['provider'] in ('claude','codex') and not db.consent_is_active(pid,project['active_snapshot_id'],project['provider']):
+    if project['provider'] in ai.AI_PROVIDERS and not db.consent_is_active(pid,project['active_snapshot_id'],project['provider']):
         raise ValueError('No se autorizó enviar código al proveedor de IA')
     baseline_run=db.last_run(pid,'baseline')
     if not baseline_run or baseline_run['status']!='completed':raise ValueError('Captura primero el Behavioral Baseline')
@@ -83,8 +83,9 @@ def enqueue(pid: str, user_id: str, parent: str | None=None) -> dict:
         if conn.execute("SELECT 1 FROM migration_attempts WHERE project_id=? AND snapshot_id=? AND blueprint_id=? AND wave_id=? AND decision='approved'",(pid,project['active_snapshot_id'],plan['id'],wave['id'])).fetchone():
             raise ValueError('Esta wave ya tiene un candidato aprobado')
         aid=str(uuid.uuid4());rid=str(uuid.uuid4())
-        conn.execute("INSERT INTO phase_runs(id,project_id,phase,status,started_at,provider,prompt_hash) VALUES(?,?,?,?,?,?,?)",
-                     (rid,pid,'modernize','running',db.now(),project['provider'],pipeline.prompt_for('modernize',pid)[1]))
+        conn.execute("INSERT INTO phase_runs(id,project_id,phase,status,started_at,provider,prompt_hash,snapshot_id,model) VALUES(?,?,?,?,?,?,?,?,?)",
+                     (rid,pid,'modernize','running',db.now(),project['provider'],pipeline.prompt_for('modernize',pid)[1],
+                      project['active_snapshot_id'],pipeline.model_for_phase('modernize',project['provider'])))
         conn.execute("""INSERT INTO migration_attempts(id,project_id,phase_run_id,snapshot_id,source_hash,blueprint_id,blueprint_revision,wave_id,pack_id,provider,parent_attempt_id,status,created_at)
           VALUES(?,?,?,?,?,?,?,?,?,?,?,?,?)""",(aid,pid,rid,project['active_snapshot_id'],project['snapshot_hash'],plan['id'],plan['revision'],wave['id'],pack['id'],project['provider'],parent,'queued',db.now()))
     db.invalidate_stages(pid,('verify',))

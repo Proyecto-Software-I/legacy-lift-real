@@ -12,7 +12,11 @@ def test_verify_default_avoids_fake_equivalence(client):
     assert result['verify_status']=='completed',result
     report=result['verification']
     assert report['classification']=='not_demonstrated',report
-    assert report['confidence_score'] is None
+    assert report['outcome']=='sin_evidencia'
+    # Orientative score: only build/syntax and lint evidence, never the test points.
+    assert report['confidence_score'] is not None and report['confidence_score']<=30
+    assert {f['id'] for f in report['confidence_factors']}=={'build','lint','tests','coverage'}
+    assert next(f for f in report['confidence_factors'] if f['id']=='tests')['points']==0
     assert report['reviewed_sha256']
     assert db.last_run(pid,'verify')['status']=='completed'
 
@@ -38,7 +42,7 @@ def test_comparison_rejects_zero_and_failed_tests():
     assert migration_verify.comparison(old,new)['classification']=='divergent'
 
 
-def test_verified_within_tests_auto_approves_migration(client, monkeypatch):
+def test_verified_within_tests_still_requires_human_decision(client, monkeypatch):
     pid, aid = prepared(client)
     ok_tests = {'status': 'passed', 'exit_code': 0, 'output': 'test_a (t.T) ... ok\n\nRan 1 test in 0.001s\n\nOK'}
     monkeypatch.setattr(migration_verify.baseline, 'capture', lambda _pid, _f: {
@@ -56,5 +60,17 @@ def test_verified_within_tests_auto_approves_migration(client, monkeypatch):
     assert client.post(f'/api/projects/{pid}/phases/verify', headers=headers()).status_code == 200
     result = migration_verify.run_one()
     assert result['verification']['classification'] == 'verified_within_tests'
-    assert result['decision'] == 'approved'
+    assert result['verification']['outcome'] == 'aprobado'
+    assert result['verification']['confidence_score'] >= 70
+    # Product §9: the result needs an explicit human approval, even when tests pass.
+    assert result['decision'] is None
+    assert db.project_get(pid)['migration_decision'] is None
+    response = client.post(f'/api/projects/{pid}/migration/decision', headers=headers(), json={'approved': True, 'reason': ''})
+    assert response.status_code == 200, response.text
     assert db.project_get(pid)['migration_decision'] == 'approved'
+
+
+def test_divergent_scores_zero():
+    st={'static_checks':{'failed':0,'total':1}}
+    report=migration_verify.comparison({**st,'tests':{'status':'passed','output':'Ran 1 test'}},{**st,'tests':{'status':'failed'}})
+    assert report['outcome']=='fallido' and report['confidence_score']==0

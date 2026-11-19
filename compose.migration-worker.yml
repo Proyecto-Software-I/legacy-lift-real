@@ -29,3 +29,4 @@ services:
       CLAUDE_MODEL: ${CLAUDE_MODEL:-claude-sonnet-5}
       CODEX_BIN: codex
       CODEX_MODEL: ${CODEX_MODEL:-gpt-6.1-sol}
+      # Gemini (Antigravity CLI) no está en esta imagen: para proyectos Gemini usa el worker en el host.

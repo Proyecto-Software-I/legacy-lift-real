@@ -22,6 +22,54 @@ executor = ThreadPoolExecutor(max_workers=2, thread_name_prefix='legacylift')
 _locks: dict[str, threading.Lock] = {}
 _guard = threading.Lock()
 PROMPT_DIR = Path(__file__).resolve().parent / 'prompts'
+AI_PHASES = {'understand', 'assess', 'plan', 'modernize'}
+PHASE_ARTIFACT = {'discover':'inventory.md', 'understand':'understand.md', 'assess':'assessment.md',
+                  'plan':'blueprint.md', 'baseline':'baseline.md', 'modernize':'migration.md', 'verify':'verification.md'}
+
+
+def model_for_phase(phase: str, provider: str) -> str:
+    return ai.model_for(provider) if phase in AI_PHASES else ai.DETERMINISTIC_ENGINE
+
+
+def template_version(phase: str) -> str:
+    file = PROMPT_DIR / f'{phase}.md'
+    if not file.is_file():
+        return 'sin plantilla (fase determinista)'
+    first = file.read_text(encoding='utf-8').splitlines()[0]
+    match = re.search(r'/\s*([A-Z]+)\s*/\s*(v\d+)', first)
+    return f'{phase}.md {match.group(2)}' if match else f'{phase}.md'
+
+
+def provenance(pid: str, phase: str, provider: str, prompt_hash: str = '', data: dict | None = None) -> dict:
+    """Which provider, model, template and snapshot produced an artifact (product §9)."""
+    project = db.project_get(pid) or {}
+    engine = (data or {}).get('engine')
+    return {'phase': phase, 'provider': provider, 'model': model_for_phase(phase, provider),
+            'engine': engine or model_for_phase(phase, provider), 'fallback': bool(engine),
+            'prompt_template': template_version(phase) if phase in AI_PHASES and provider in ai.AI_PROVIDERS else 'sin prompt (determinista)',
+            'prompt_hash': prompt_hash or None, 'snapshot_id': project.get('active_snapshot_id'),
+            'source_hash': project.get('snapshot_hash'), 'recorded_at': db.now()}
+
+
+def provenance_md(prov: dict) -> str:
+    lines = ['', '---', '', '## Procedencia', '',
+             f"- Fase: `{prov['phase']}`",
+             f"- Proveedor: `{prov['provider']}` · modelo: `{prov['model']}`",
+             f"- Plantilla de prompt: `{prov['prompt_template']}`" + (f" (hash `{prov['prompt_hash']}`)" if prov.get('prompt_hash') else ''),
+             f"- Snapshot: `{prov.get('snapshot_id') or 'N/D'}` · hash de fuente `{(prov.get('source_hash') or 'N/D')[:16]}`",
+             f"- Registrado: {prov['recorded_at']}"]
+    if prov.get('fallback'):
+        lines.append(f"- **Motor realmente usado:** {prov['engine']}. El resultado no proviene del modelo indicado.")
+    return '\n'.join(lines) + '\n'
+
+
+def stamp_artifact(pid: str, phase: str, prov: dict) -> None:
+    name = PHASE_ARTIFACT.get(phase)
+    path = workspace.artifact_dir(pid) / name if name else None
+    if path and path.is_file():
+        text = path.read_text(encoding='utf-8')
+        if '\n## Procedencia\n' not in text:
+            path.write_text(text.rstrip('\n') + '\n' + provenance_md(prov), encoding='utf-8')
 
 
 def phase_ready(pid: str, phase: str) -> tuple[bool, str]:
@@ -37,7 +85,7 @@ def phase_ready(pid: str, phase: str) -> tuple[bool, str]:
         return False, f'Primero completa {prev}'
     if phase in {'baseline', 'modernize', 'verify'} and project['plan_approved'] != 1:
         return False, 'Aprueba el plan antes de preparar o transformar'
-    if phase in {'understand','assess','plan','modernize'} and project['provider'] in {'codex','claude'}:
+    if phase in {'understand','assess','plan','modernize'} and project['provider'] in ai.AI_PROVIDERS:
         if not db.consent_is_active(pid,project.get('active_snapshot_id'),project['provider']):
             return False, 'Autoriza el envío de código al proveedor de IA antes de iniciar esta fase'
     if phase in {'baseline','modernize','verify'} and not planning.executable_wave(pid):
@@ -115,7 +163,7 @@ def start(pid: str, phase: str) -> dict:
             db.project_update(pid, plan_approved=None)
         if 'verify' in successors:
             db.project_update(pid, migration_decision=None)
-        rid = db.run_create(pid, phase, project['provider'], prompt_hash)
+        rid = db.run_create(pid, phase, project['provider'], prompt_hash, model_for_phase(phase, project['provider']))
         executor.submit(_perform_and_release, pid, phase, rid, lock)
         return {'id':rid, 'phase':phase, 'status':'running'}
     except Exception:
@@ -126,7 +174,11 @@ def start(pid: str, phase: str) -> dict:
 def _perform_and_release(pid: str, phase: str, rid: str, lock: threading.Lock) -> None:
     try:
         summary, details = perform(pid, phase)
-        db.run_complete(rid, summary, details)
+        project = db.project_get(pid) or {}
+        run = next((r for r in db.runs_get(pid) if r['id'] == rid), {})
+        prov = provenance(pid, phase, project.get('provider', 'demo'), run.get('prompt_hash') or '', details)
+        stamp_artifact(pid, phase, prov)
+        db.run_complete(rid, summary, {**details, 'provenance': prov})
     except Exception as exc:
         db.run_fail(rid, str(exc))
     finally:
@@ -247,7 +299,7 @@ def perform(pid: str, phase: str, progress=None) -> tuple[str, dict]:
         return f"Inventario de {info['files']} archivos y {len(info['modules'])} módulos", info
     if phase in {'understand', 'assess', 'plan'}:
         # Defense in depth: worker/in-process calls must respect privacy too.
-        if provider in {'codex','claude'} and not db.consent_is_active(pid,project.get('active_snapshot_id'),provider):
+        if provider in ai.AI_PROVIDERS and not db.consent_is_active(pid,project.get('active_snapshot_id'),provider):
             raise ValueError('El proyecto requiere consentimiento explícito para enviar código a IA')
         if phase=='understand':
             template=(PROMPT_DIR/'understand.md').read_text(encoding='utf-8')
@@ -256,25 +308,31 @@ def perform(pid: str, phase: str, progress=None) -> tuple[str, dict]:
             template=(PROMPT_DIR/'assess.md').read_text(encoding='utf-8')
             return assessment.assess(pid,provider,template,source)
         prompt, _ = prompt_for(phase, pid)
+        ai_unavailable = False
         if provider == 'demo':
             text=_demo_text(phase,pid)
         else:
             try:
-                if provider == 'codex':
+                if provider in ai.LOCAL_AGENTS:
                     with analysis_context.scoped_workspace(pid,source) as isolated:
                         text=ai.generate(provider,prompt,isolated)
                 else:
                     text=ai.generate(provider,prompt,source)
             except ai.AIError as exc:
-                if phase == 'plan' and ('usage limit' in str(exc).lower() or 'quota' in str(exc).lower()):
+                if phase == 'plan' and ai.is_quota_error(exc):
                     text = ''
+                    ai_unavailable = True
                 else:
                     raise
         if phase == 'plan':
             # The AI narrative is advisory. The structured blueprint is constrained by the
             # source snapshot and remains a proposal until explicitly approved.
-            result=planning.proposal(pid,text[:30000],provider)
-            return f"Blueprint revisión {result['revision']}: {len(result['data']['waves'])} waves", {'blueprint_id':result['id'],'revision':result['revision']}
+            unavailable = provider != 'demo' and ai_unavailable
+            result=planning.proposal(pid,text[:30000],provider,ai_unavailable=unavailable)
+            details={'blueprint_id':result['id'],'revision':result['revision'],'ai_generated':result['data'].get('ai_generated',False)}
+            if provider != 'demo' and not result['data'].get('ai_generated'):
+                details['engine']='planificador estático determinista ('+('cuota de IA agotada' if unavailable else 'la IA no devolvió un Blueprint válido')+')'
+            return f"Blueprint revisión {result['revision']}: {len(result['data']['waves'])} waves", details
         filename = {'understand':'understand.md','assess':'assessment.md','plan':'blueprint.md'}[phase]
         workspace.save_artifact(pid, filename, text)
         return text[:250].replace('\n', ' '), {'artifact':filename, 'mode':provider}
@@ -285,9 +343,10 @@ def perform(pid: str, phase: str, progress=None) -> tuple[str, dict]:
         return f"Baseline registrado: {data['static_checks']['total']} verificaciones de sintaxis", data
     if phase == 'modernize':
         if not planning.executable_wave(pid):raise ValueError('Se requiere wave aprobada y pack compatible')
-        if provider in {'codex','claude'} and not db.consent_is_active(pid,project.get('active_snapshot_id'),provider):
+        if provider in ai.AI_PROVIDERS and not db.consent_is_active(pid,project.get('active_snapshot_id'),provider):
             raise ValueError('El proyecto requiere consentimiento para enviar código a IA')
         candidate = workspace.copy_snapshot(pid)
+        fallback_engine = None
         try:
             if provider == 'demo':
                 response = _modernize_demo(pid)
@@ -304,8 +363,9 @@ def perform(pid: str, phase: str, progress=None) -> tuple[str, dict]:
                         response = ai.generate(provider, prompt + json_instruction, isolated, edit=False)
                     _apply_claude_changes(pid, response)
                 except ai.AIError as exc:
-                    if 'usage limit' in str(exc).lower() or 'quota' in str(exc).lower():
-                        response = _modernize_demo(pid) + '\n\n> Nota: Cuota de ChatGPT/Codex agotada durante Modernize; se aplicó el transformador seguro del pack `safe-refactor@1.0`.'
+                    if ai.is_quota_error(exc):
+                        response = _modernize_demo(pid) + '\n\n> Cuota del proveedor de IA agotada: se aplicó el transformador determinista del pack `safe-refactor@1.0`. Este cambio no proviene del modelo.'
+                        fallback_engine = 'transformador determinista safe-refactor@1.0 (cuota de IA agotada)'
                     else:
                         raise
             changed = _validate_changed_paths(pid)
@@ -313,9 +373,13 @@ def perform(pid: str, phase: str, progress=None) -> tuple[str, dict]:
             if not changed or not count:
                 raise ValueError('No se generó una modificación de código; no se considera completada la migración')
             workspace.save_artifact(pid, 'changes.patch', diff)
-            workspace.save_artifact(pid, 'migration.md', '# Modernize — Ejecución\n\n' + response[:13000] + f'\n\nArchivos modificados: {count}\n')
+            result = {'modified_files':changed}
+            if fallback_engine:
+                result['engine'] = fallback_engine
+            prov = provenance(pid, 'modernize', provider, prompt_for('modernize', pid)[1], result)
+            workspace.save_artifact(pid, 'migration.md', '# Modernize — Ejecución\n\n' + response[:13000] + f'\n\nArchivos modificados: {count}\n' + provenance_md(prov))
             db.project_update(pid, migration_decision=None)
-            return f'{count} archivo(s) modernizado(s), diff disponible', {'modified_files':changed}
+            return f'{count} archivo(s) modernizado(s), diff disponible', {**result, 'provenance': prov}
         except Exception:
             workspace.copy_snapshot(pid)
             raise

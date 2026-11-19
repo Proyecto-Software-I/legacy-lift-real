@@ -79,27 +79,19 @@ def suggest(pid:str)->list[dict]:
       'Cada evidence_file debe ser uno de estos archivos reales: '+json.dumps(wave['files'])+'\n'
       'Contexto: '+str(db.analysis_get(pid,project['active_snapshot_id'],'understand') or {})[:2600])
     try:
-        if project['provider']=='codex':
+        if project['provider'] in ai.LOCAL_AGENTS:
             with analysis_context.scoped_workspace(pid,workspace.project_source(pid)) as isolated:
-                response=ai.generate('codex',prompt,isolated)
+                response=ai.generate(project['provider'],prompt,isolated)
         else:response=ai.generate('claude',prompt,workspace.project_source(pid))
         match=re.search(r'\{[\s\S]*\}',response)
         try:data=json.loads(match.group(0)) if match else {}
         except json.JSONDecodeError:data={}
         entries=data.get('cases') if isinstance(data,dict) else None
     except ai.AIError as exc:
-        if 'usage limit' not in str(exc).lower() and 'quota' not in str(exc).lower():
-            raise ValueError(str(exc)) from exc
-        entries=[]
-        for rel in wave['files'][:4]:
-            p=workspace.project_source(pid)/rel
-            if p.is_file():
-                entries.append({
-                    'title':f'Verificar contrato público de {rel}',
-                    'input':f'Entradas límite y válidas sobre {rel}',
-                    'expected':'Misma salida y excepciones antes y después de refactorizar',
-                    'evidence_file':rel,
-                })
+        # No synthetic "AI" proposals when the model is unavailable: report the failure.
+        if ai.is_quota_error(exc):
+            raise ValueError('La cuota del proveedor de IA está agotada; no se generaron propuestas. Reintenta más tarde.') from exc
+        raise ValueError(str(exc)) from exc
     if not isinstance(entries,list):return proposals(pid)
     for case in entries[:8]:
         if not isinstance(case,dict):continue
@@ -137,9 +129,26 @@ def capture(pid:str,folder:Path)->dict:
     return {'schema_version':1,'snapshot_id':project['active_snapshot_id'],'blueprint_id':plan['id'],
             'blueprint_revision':plan['revision'],'wave_id':project['active_wave_id'],
             'source_hash':workspace.snapshot_hash(folder), 'static_checks':inspection.check_summary(checks),
+            'lint':inspection.lint_checks(folder),
             'details':checks[:250],'test_inventory':test_inventory,'test_cases_approved':approved,
             'tests':output,'execution_authorized':authorized(pid),
+            'gaps':gaps(test_inventory,output,authorized(pid),approved),
             'methodology':'Sintaxis y manifiestos no prueban equivalencia; los casos propuestos por IA son solo especificaciones revisables.'}
+
+
+def gaps(test_inventory:list[dict],tests:dict,execution_authorized:bool,approved_cases:list[str])->list[str]:
+    """Explicit list of what this baseline cannot prove (product §2.4: register the gap)."""
+    out=[]
+    if not test_inventory:
+        out.append('No se detectó ninguna suite de pruebas: no habrá comparación de comportamiento, solo de sintaxis.')
+    if tests.get('status')!='passed':
+        if not execution_authorized:
+            out.append('La ejecución de pruebas no fue autorizada: el baseline solo registra sintaxis y estructura.')
+        else:
+            out.append('Las pruebas no se ejecutaron con éxito ('+str(tests.get('status'))+'): '+str(tests.get('reason') or 'sin detalle'))
+    if approved_cases:
+        out.append(f'{len(approved_cases)} casos propuestos por IA están aprobados pero aún no son tests ejecutables.')
+    return out
 
 
 def markdown(data:dict)->str:
@@ -150,6 +159,11 @@ def markdown(data:dict)->str:
            '## Pruebas detectadas']
     lines += [f"- `{x['path']}` — {x['framework']}" for x in data['test_inventory']] or ['- No se detectaron suites conocidas.']
     lines += ['', '## Pruebas ejecutadas',f"- Resultado: **{t['status']}**",'- '+t.get('reason','Ejecución limitada a Docker de desarrollo con autorización explícita.'),
-              f"- Casos propuestos por IA y aprobados: {len(data['test_cases_approved'])} (no ejecutados automáticamente)",
-              '', 'Este documento no certifica equivalencia entre versiones.']
+              f"- Casos propuestos por IA y aprobados: {len(data['test_cases_approved'])} (no ejecutados automáticamente)"]
+    lint=data.get('lint') or {}
+    if lint:
+        lines += ['', '## Lint',f"- {lint.get('warnings',0)} avisos en {lint.get('files_linted',0)} archivos Python; {lint.get('files_not_supported',0)} archivos de otros lenguajes sin lint disponible"]
+    lines += ['', '## Carencias de verificación']
+    lines += [f'- {g}' for g in data.get('gaps') or []] or ['- Ninguna detectada: hay pruebas ejecutadas para comparar.']
+    lines += ['', 'Este documento no certifica equivalencia entre versiones.']
     return '\n'.join(lines)+'\n'

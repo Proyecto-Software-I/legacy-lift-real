@@ -105,6 +105,8 @@ def init() -> None:
         phase_columns = {row['name'] for row in db.execute('PRAGMA table_info(phase_runs)')}
         if 'snapshot_id' not in phase_columns:
             db.execute('ALTER TABLE phase_runs ADD COLUMN snapshot_id TEXT')
+        if 'model' not in phase_columns:
+            db.execute('ALTER TABLE phase_runs ADD COLUMN model TEXT')
         db.executescript('''
         CREATE TABLE IF NOT EXISTS ingest_jobs (
           id TEXT PRIMARY KEY, project_id TEXT NOT NULL REFERENCES projects(id) ON DELETE CASCADE,
@@ -285,13 +287,13 @@ def project_update(pid: str, **values: Any) -> None:
         db.execute(sql, (*[values[k] for k in keys], pid))
 
 
-def run_create(pid: str, phase: str, provider: str, prompt_hash: str = '') -> str:
+def run_create(pid: str, phase: str, provider: str, prompt_hash: str = '', model: str = '') -> str:
     rid = str(uuid.uuid4())
     with connect() as db:
         active=db.execute('SELECT active_snapshot_id FROM projects WHERE id=?',(pid,)).fetchone()
         sid=active['active_snapshot_id'] if active else None
-        db.execute('INSERT INTO phase_runs(id,project_id,phase,status,started_at,provider,prompt_hash,snapshot_id) VALUES(?,?,?,?,?,?,?,?)',
-                   (rid, pid, phase, 'running', now(), provider, prompt_hash,sid))
+        db.execute('INSERT INTO phase_runs(id,project_id,phase,status,started_at,provider,prompt_hash,snapshot_id,model) VALUES(?,?,?,?,?,?,?,?,?)',
+                   (rid, pid, phase, 'running', now(), provider, prompt_hash,sid,model))
     project_event(pid, 'phase', {'phase':phase,'status':'running','id':rid})
     return rid
 

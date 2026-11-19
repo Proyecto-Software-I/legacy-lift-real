@@ -9,6 +9,9 @@ from .context import context_batches, scoped_workspace
 from .understanding import _json_object, _evidence
 
 
+ASSESS_STRATEGIES={'Keep','Stabilize','Encapsulate','Rehost','Replatform','Refactor','Rearchitect','Rewrite','Replace','Retire'}
+
+
 def assess(pid: str,provider: str,template: str,source: Path) -> tuple[str,dict]:
     project=db.project_get(pid);sid=project['active_snapshot_id']
     inv=db.analysis_get(pid,sid,'discover') or {}
@@ -33,14 +36,20 @@ def assess(pid: str,provider: str,template: str,source: Path) -> tuple[str,dict]
              {'id':'heuristics','label':'Marcadores heurísticos','value':len(reported_findings),
               'unit':'hallazgos','evidence':'inventory.json','note':'No equivalen a defectos confirmados'},
              {'id':'deps','label':'Dependencias locales detectadas','value':evidence_summary['local_dependency_edges'],
-              'unit':'enlaces','evidence':'inventory.json'}]
+              'unit':'enlaces','evidence':'inventory.json'},
+             {'id':'external','label':'Dependencias externas','value':len(inv.get('external_dependencies',[])),
+              'unit':'paquetes','evidence':'inventory.json','note':'Imports no locales ni de la biblioteca estándar, más manifiestos'},
+             {'id':'complexity','label':'Complejidad máxima observada','value':(inv.get('complexity') or {}).get('max',0),
+              'unit':'decisiones','evidence':'inventory.json','note':(inv.get('complexity') or {}).get('method','')},
+             {'id':'maintainability','label':'Hallazgos de mantenibilidad','value':sum(1 for f in reported_findings if f['rule'] in ('COMPLEX_FUNCTION','LONG_FUNCTION','COMPLEX_FILE','LARGE_FILE')),
+              'unit':'hallazgos','evidence':'inventory.json','note':'Funciones complejas o largas y archivos grandes'}]
     recommendations=[]
     for module in sorted(set(f['module'] for f in source_files)):
         issues=by_module.get(module,[])
-        large=[f for f in issues if f['rule']=='LARGE_FILE']
+        large=[f for f in issues if f['rule'] in ('LARGE_FILE','COMPLEX_FUNCTION','COMPLEX_FILE','LONG_FUNCTION')]
         todo=[f for f in issues if f['rule']=='TODO_MARKER']
         if large:
-            strategy='Refactor';reason='Hay archivos de código grandes identificados estáticamente.'
+            strategy='Refactor';reason='Hay código complejo o extenso identificado estáticamente (funciones/archivos sobre el umbral).'
         elif todo:
             strategy='Stabilize';reason='Existen tareas TODO/FIXME sin revisar.'
         elif not inv.get('test_files'):
@@ -67,7 +76,7 @@ def assess(pid: str,provider: str,template: str,source: Path) -> tuple[str,dict]
     if provider!='demo':
         valid_modules=inv.get('modules',[])
         prompt=(template+'\n\nDevuelve exclusivamente JSON: '
-                '{"recommendations":[{"module":"nombre","strategy":"Keep|Stabilize|Encapsulate|Refactor|Rewrite",'
+                '{"recommendations":[{"module":"nombre","strategy":"'+'|'.join(sorted(ASSESS_STRATEGIES))+'",'
                 '"reason":"justificación","evidence":[{"file":"ruta","line":1}]}],"questions":[]}. '
                 f'Usa exactamente uno de estos nombres válidos en "module": {json.dumps(valid_modules,ensure_ascii=False)}. '
                 'No inventes métricas ni evidencia. Solo analiza este material:\n'+
@@ -76,18 +85,17 @@ def assess(pid: str,provider: str,template: str,source: Path) -> tuple[str,dict]
                 '\n# Código seleccionado\n'+'\n'.join(selected))
         db.project_event(pid,'analysis-stage',{'phase':'assess','stage':'ai_recommendations','progress':65})
         try:
-            if provider=='codex':
+            if provider in ai.LOCAL_AGENTS:
                 with scoped_workspace(pid,source) as isolated:output=ai.generate(provider,prompt,isolated)
             else:output=ai.generate(provider,prompt,source)
             parsed=_json_object(output)
         except ai.AIError as exc:
-            if 'usage limit' not in str(exc).lower() and 'quota' not in str(exc).lower():
+            if not ai.is_quota_error(exc):
                 raise
-            docs['limits'].append('Cuota del proveedor de IA agotada temporalmente; se generaron recomendaciones de contingencia basadas en evidencia estática.')
-            parsed={'recommendations':[
-                {'module':f['module'],'strategy':'Refactor','reason':f"Refactorización conservadora sugerida sobre `{f['path']}` manteniendo contratos.",'evidence':[{'file':f['path'],'line':1}]}
-                for f in source_files[:4]
-            ],'questions':['Verificar alcance antes de aprobar wave.']}
+            # No synthetic AI recommendations: static heuristics above remain the only evidence.
+            docs['limits'].append('Cuota del proveedor de IA agotada: no hay recomendaciones de IA; solo se muestran las heurísticas estáticas.')
+            docs['engine']='heurísticas estáticas (la IA no respondió: cuota agotada)'
+            parsed={'recommendations':[],'questions':[]}
         if parsed is None:
             docs['limits'].append('La IA no devolvió JSON válido; solo se conservan hallazgos estáticos.')
         else:
@@ -96,7 +104,7 @@ def assess(pid: str,provider: str,template: str,source: Path) -> tuple[str,dict]
             for suggestion in (parsed.get('recommendations') if isinstance(parsed.get('recommendations'),list) else [])[:35]:
                 if not isinstance(suggestion,dict):continue
                 strategy=suggestion.get('strategy');module=suggestion.get('module')
-                if strategy not in {'Keep','Stabilize','Encapsulate','Refactor','Rewrite'} or not isinstance(module,str):continue
+                if strategy not in ASSESS_STRATEGIES or not isinstance(module,str):continue
                 why=suggestion.get('reason','')
                 if not isinstance(why,str) or not why.strip():continue
                 evidence=_evidence(suggestion.get('evidence'),index)
