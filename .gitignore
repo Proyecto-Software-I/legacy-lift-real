@@ -12,3 +12,6 @@ test-results/
 
 # Copias sincronizadas de los recursos oficiales; fuente: Proyecto-Software-I/frontend
 frontend/public/branding/official/
+.firebase/
+deploy/*.log
+README-EXAMEN.md

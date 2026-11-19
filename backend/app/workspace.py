@@ -248,7 +248,7 @@ def copy_snapshot(pid: str) -> Path:
 def read_code_context(folder: Path, limit: int = 55000) -> str:
     blocks = []
     used = 0
-    allowed = {'.py', '.ts', '.js', '.java', '.cs', '.go', '.php', '.md', '.json', '.xml', '.yml', '.yaml', '.toml', '.sql'}
+    allowed = {'.py', '.ts', '.js', '.java', '.cs', '.go', '.php', '.cbl', '.cob', '.cobol', '.cpy', '.pco', '.md', '.json', '.xml', '.yml', '.yaml', '.toml', '.sql'}
     for file in sorted(folder.rglob('*')):
         if not file.is_file() or file.is_symlink() or file.suffix.lower() not in allowed:
             continue

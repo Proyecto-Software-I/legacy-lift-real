@@ -28,7 +28,8 @@ def main():
         while True:
             migration_runs.heartbeat()
             result=migration_runs.run_one()
-            if not result:result=migration_verify.run_one()
+            if not result and os.getenv('LEGACYLIFT_VERIFY_IN_HOST','false').lower()!='true':
+                result=migration_verify.run_one()
             if result:print(f"Migration attempt {result['id']}: {result['status']}",flush=True)
             if args.once:break
             if not result:time.sleep(2)

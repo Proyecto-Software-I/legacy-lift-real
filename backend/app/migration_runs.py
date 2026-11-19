@@ -166,11 +166,13 @@ def heartbeat() -> None:
 
 def recover_interrupted() -> None:
     """Called only by a worker holding the exclusive worker lock."""
+    verify_in_host = os.getenv('LEGACYLIFT_VERIFY_IN_HOST', 'false').lower() == 'true'
     with db.connect() as conn:
         aborted=conn.execute("SELECT id,project_id,phase_run_id FROM migration_attempts WHERE status='running'").fetchall()
-        verifications=conn.execute("SELECT id,project_id,verify_run_id FROM migration_attempts WHERE verify_status='running'").fetchall()
+        verifications=[] if verify_in_host else conn.execute("SELECT id,project_id,verify_run_id FROM migration_attempts WHERE verify_status='running'").fetchall()
         conn.execute("UPDATE migration_attempts SET status='failed',finished_at=?,error='Worker anterior interrumpido; reintento manual necesario' WHERE status='running'",(db.now(),))
-        conn.execute("UPDATE migration_attempts SET verify_status='failed',verification_json=NULL WHERE verify_status='running'")
+        if not verify_in_host:
+            conn.execute("UPDATE migration_attempts SET verify_status='failed',verification_json=NULL WHERE verify_status='running'")
     for row in aborted:
         db.run_fail(row['phase_run_id'],'Worker anterior interrumpido; reintento manual necesario')
     for row in verifications:

@@ -30,15 +30,19 @@
         <label class="select-row"><input type="checkbox" [checked]="file.selected" [disabled]="!!attempt.decision || attempt.verify_status==='queued' || attempt.verify_status==='running'"
           (change)="vm.setMigrationFile(file.path,$any($event.target).checked,file.comment)"/>
           Conservar este archivo en la versión modernizada</label>
-        <label class="comment-label">Comentario de revisión
-          <textarea rows="2" [value]="file.comment" [disabled]="!!attempt.decision || attempt.verify_status==='queued' || attempt.verify_status==='running'"
-            (change)="vm.setMigrationFile(file.path,file.selected,$any($event.target).value)" placeholder="Por qué aceptas o descartas este cambio..."></textarea>
-        </label>
-        <button llButton variant="secondary" type="button" (click)="vm.showMigrationDiff(file.path)" [attr.aria-expanded]="vm.migrationDiffFile===file.path">
-          <ll-icon name="code" size="sm"/> {{vm.migrationDiffFile===file.path?'Ocultar diff completo':'Ver diff completo'}}</button>
+        <div class="actions-inline">
+          <button llButton variant="secondary" type="button" (click)="vm.showMigrationDiff(file.path)" [attr.aria-expanded]="vm.migrationDiffFile===file.path">
+            <ll-icon name="code" size="sm"/> {{vm.migrationDiffFile===file.path?'Ocultar diff completo':'Ver diff completo'}}</button>
+        </div>
+        <details>
+          <summary style="font-size:12px;color:var(--color-muted);cursor:pointer">Agregar nota opcional</summary>
+          <label class="comment-label" style="margin-top:8px">
+            <input class="input" type="text" [value]="file.comment" [disabled]="!!attempt.decision || attempt.verify_status==='queued' || attempt.verify_status==='running'"
+              (change)="vm.setMigrationFile(file.path,file.selected,$any($event.target).value)" placeholder="Nota opcional de revisión..."/>
+          </label>
+        </details>
         <pre class="diff" *ngIf="vm.migrationDiffFile===file.path"><code>{{vm.migrationDiffText}}</code></pre>
       </div>
-      <p class="muted">La selección se realiza por archivo completo. La aprobación parcial de hunks no está disponible todavía.</p>
       <button llButton variant="primary" type="button" (click)="vm.chooseWorkspaceSection('verify')" [disabled]="review.selected_count===0">
         Continuar a Verify <ll-icon name="arrow_forward" size="sm"/></button>
     </ng-container>

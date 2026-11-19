@@ -1,26 +1,32 @@
 <section class="panel pack-panel" *ngIf="vm.selected && vm.blueprint as plan" aria-label="Packs y aprobación de waves">
-  <ll-section-heading eyebrow="SPRINT 3 / APROBACIONES" title="Migration Packs"
-    description="Compatibilidad de cada wave; los packs futuros no autorizan ejecución."/>
-  <p class="caption">Blueprint {{plan.status}} · rev. {{plan.revision}}. Las waves se aprueban individualmente y sus dependencias deben estar aprobadas.</p>
-  <div class="pack-list" *ngIf="vm.packs as catalog">
-    <div class="pack" *ngFor="let pack of catalog.packs"><strong>{{pack.name}} <small>{{pack.version}}</small></strong>
-      <ll-status-badge [status]="pack.status==='available'?'ready':'locked'" [label]="pack.status==='available'?'Disponible':'Planificado'"/>
-      <p>{{pack.description}}</p></div>
+  <ll-section-heading eyebrow="SPRINT 3 / PLAN Y WAVES" title="Aprobación de Plan y Waves"
+    description="Aprueba el Blueprint y selecciona una Wave compatible para avanzar a Baseline."/>
+  <div class="actions" *ngIf="plan.status!=='approved'">
+    <button llButton variant="primary" type="button" (click)="vm.planDecision(true)" [disabled]="vm.isAnyRunning">
+      <ll-icon name="check_circle" size="sm"/> 1. Aprobar Blueprint (rev. {{plan.revision}})
+    </button>
   </div>
   <div class="wave-list">
     <article *ngFor="let wave of plan.data.waves" class="wave-item" [class.active]="vm.selected?.active_wave_id===wave.id">
       <div class="wave-header"><strong>{{wave.id}} — {{wave.goal}}</strong><ll-status-badge [status]="plan.wave_approvals[wave.id]||'pending'"/></div>
-      <p>{{wave.strategy}} · {{wave.files.length}} archivo(s)</p>
+      <p>{{wave.strategy}} · {{wave.files.length}} archivo(s): <code>{{wave.files.join(', ')}}</code></p>
       <p class="compat" [class.blocked]="!vm.packMatch(wave).compatible"><ll-icon [name]="vm.packMatch(wave).compatible?'check_circle':'block'" size="sm"/>
         {{vm.packMatch(wave).name}}: {{vm.packMatch(wave).reason}}</p>
       <div class="actions" *ngIf="plan.status==='approved'">
         <button llButton variant="primary" type="button" [disabled]="!vm.packMatch(wave).compatible || vm.isAnyRunning" (click)="vm.waveDecision(wave.id,true)">
-          <ll-icon name="verified" size="sm"/> Aprobar wave</button>
+          <ll-icon name="verified" size="sm"/> 2. Aprobar wave</button>
         <button llButton variant="secondary" type="button" [disabled]="vm.isAnyRunning" (click)="vm.waveDecision(wave.id,false)">Rechazar</button>
         <button llButton variant="secondary" type="button" *ngIf="plan.wave_approvals[wave.id]==='approved' && vm.selected?.active_wave_id!==wave.id"
           (click)="vm.selectWave(wave.id)">Seleccionar</button>
       </div>
     </article>
   </div>
-  <p class="caption" *ngIf="plan.status!=='approved'">Aprueba primero el blueprint desde el panel de acciones.</p>
+  <details *ngIf="vm.packs as catalog">
+    <summary class="caption" style="cursor:pointer;font-weight:600">Ver catálogo de Migration Packs ({{catalog.packs.length}})</summary>
+    <div class="pack-list" style="margin-top:10px">
+      <div class="pack" *ngFor="let pack of catalog.packs"><strong>{{pack.name}} <small>{{pack.version}}</small></strong>
+        <ll-status-badge [status]="pack.status==='available'?'ready':'locked'" [label]="pack.status==='available'?'Disponible':'Planificado'"/>
+        <p>{{pack.description}}</p></div>
+    </div>
+  </details>
 </section>

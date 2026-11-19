@@ -6,7 +6,7 @@ from . import db
 
 PACKS=(
  {'id':'safe-refactor@1.0','name':'Safe Refactor','status':'available','version':'1.0',
-  'strategies':['Refactor'],'languages':['Python','JavaScript','TypeScript','Java','C#','Go'],
+  'strategies':['Refactor'],'languages':['Python','JavaScript','TypeScript','Java','C#','Go','COBOL'],
   'prompt':'modernize.md','validators':['static','python-unittest-docker'],
   'description':'Cambios limitados en el mismo lenguaje y máximo cinco archivos existentes.'},
  {'id':'cobol-to-java@0.1-draft','name':'COBOL a Java','status':'planned','version':'0.1-draft',

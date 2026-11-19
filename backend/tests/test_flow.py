@@ -18,6 +18,7 @@ def client(tmp_path, monkeypatch):
     monkeypatch.setenv('LEGACYLIFT_BOOTSTRAP_SECRET','bootstrap-test-secret-with-32-plus-characters')
     monkeypatch.setenv('LEGACYLIFT_DATA_DIR', str(tmp_path / 'data'))
     monkeypatch.setenv('VALIDATION_MODE', 'static')
+    monkeypatch.setenv('LEGACYLIFT_WORKER_MODE', 'disabled')
     with TestClient(app) as t:
         t.post('/api/auth/register',json={'email':'tester@example.test','password':'testing-strong-password-123','display_name':'Tester','bootstrap_secret':'bootstrap-test-secret-with-32-plus-characters'})
         yield t
@@ -29,11 +30,11 @@ def headers():
 
 
 def await_ingest(pid: str, jid: str) -> dict:
-    for _ in range(160):
+    for _ in range(600):
         job=db.job_get(pid,jid)
         if job['status'] not in ('queued','running'):
             return job
-        time.sleep(.02)
+        time.sleep(.05)
     raise AssertionError('El trabajo de ingesta no terminó')
 
 

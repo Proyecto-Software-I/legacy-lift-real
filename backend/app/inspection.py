@@ -38,6 +38,10 @@ def static_checks(folder: Path) -> list[dict]:
                 ast.parse(file.read_text(encoding='utf-8-sig'), filename=rel)
             elif file.suffix.lower() == '.json':
                 json.loads(file.read_text(encoding='utf-8-sig'))
+            elif file.suffix.lower() in {'.cbl','.cob','.cobol'}:
+                text = file.read_text(encoding='utf-8-sig')
+                if not re.search(r'\bPROGRAM-ID\.', text, re.I) or not re.search(r'\bPROCEDURE\s+DIVISION\b', text, re.I):
+                    raise SyntaxError('Falta PROGRAM-ID o PROCEDURE DIVISION en programa COBOL')
             else:
                 continue
             checks.append({'file':rel, 'status':'passed', 'check':'syntax'})

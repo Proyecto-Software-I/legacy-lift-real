@@ -23,4 +23,17 @@
     <div class="file-footer"><span>Se muestran hasta 100 archivos coincidentes. Los límites de lotes reducen consumo de IA.</span>
       <button llButton variant="primary" size="sm" type="button" (click)="vm.saveSourceSelection()" [disabled]="vm.analysisBusy || !vm.selectedFileCount || vm.isAnyRunning || vm.ingestRunning">Guardar selección</button></div>
   </details>
+  <div class="understand-summary" *ngIf="vm.understandData as u">
+    <div class="understand-head">
+      <span class="eyebrow">RESULTADO DE UNDERSTAND ({{u.provider | uppercase}})</span>
+      <span class="coverage-pill" *ngIf="u.coverage">Cobertura IA: {{u.coverage['files_included'] || 0}} / {{u.coverage['files_selected'] || 0}} archivos ({{u.coverage['bytes_included'] || 0}} B)</span>
+    </div>
+    <p class="understand-text">{{u.summary}}</p>
+    <div class="understand-questions" *ngIf="u.questions?.length">
+      <strong>Preguntas abiertas detectadas por el análisis:</strong>
+      <ul>
+        <li *ngFor="let q of u.questions">{{q}}</li>
+      </ul>
+    </div>
+  </div>
 </section>

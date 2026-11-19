@@ -42,8 +42,11 @@ export interface MigrationReviewFile {path:string;selected:boolean;comment:strin
 export interface MigrationReviewSummary {attempt_id:string;files:MigrationReviewFile[];total_files:number;
   selected_count:number;added:number;removed:number;explanation:string;selection_level:string;}
 export interface MigrationVerification {classification:'verified_within_tests'|'partial'|'not_demonstrated'|'divergent';
-  reason:string;limits:string;files_selected:number;reviewed_sha256:string;
-  static_before:{failed:number;total:number};static_after:{failed:number;total:number};}
+  reason:string;limits:string;files_selected:number;reviewed_sha256:string;candidate_sha256?:string;
+  static_before:{failed:number;total:number;passed?:number};static_after:{failed:number;total:number;passed?:number};
+  before?:{status:string;exit_code?:number;output?:string;worker?:string;image?:string;network?:string;read_only?:boolean;reason?:string};
+  after?:{status:string;exit_code?:number;output?:string;worker?:string;image?:string;network?:string;read_only?:boolean;reason?:string};
+  test_names_before?:string[];test_names_after?:string[];confidence_score?:number|null;}
 export interface MigrationWave {id:string; goal:string; strategy:string; files:string[]; depends_on:string[];
   priority:number;risk:string;acceptance_criteria:string;}
 export interface BlueprintData {schema_version:number;title:string;target_architecture:string;source_snapshot_id:string;
@@ -158,6 +161,7 @@ export class ApiService {
     return this.http.post<IngestJob>(`${this.base}/projects/${pid}/git`,{full_name});
   }
   demoZip(): Observable<Blob> { return this.http.get('/demo-source.zip', {responseType: 'blob'}); }
+  demoCobolZip(): Observable<Blob> { return this.http.get('/demo-cobol.zip', {responseType: 'blob'}); }
   upload(pid: string, file: File): Observable<IngestJob> {
     const body = new FormData(); body.append('file', file);
     return this.http.post<IngestJob>(`${this.base}/projects/${pid}/upload`, body);

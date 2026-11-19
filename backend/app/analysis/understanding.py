@@ -50,12 +50,21 @@ def understand(pid: str,provider: str,template: str,source: Path) -> tuple[str,d
                     '"questions":["..."]}. No supongas evidencia. En caso de duda omite la regla. '
                     'Cada lote cubre solo parte del proyecto. Límites de archivos: '
                     f'{coverage}. LOTE {batch_number}/{len(chunks)}:\n'+chunk)
-            if provider == 'codex':
-                with scoped_workspace(pid,source) as ai_source:
-                    output=ai.generate(provider,prompt,ai_source)
-            else:
-                output=ai.generate(provider,prompt,source)
-            payload=_json_object(output)
+            try:
+                if provider == 'codex':
+                    with scoped_workspace(pid,source) as ai_source:
+                        output=ai.generate(provider,prompt,ai_source)
+                else:
+                    output=ai.generate(provider,prompt,source)
+                payload=_json_object(output)
+            except ai.AIError as exc:
+                if 'usage limit' not in str(exc).lower() and 'quota' not in str(exc).lower():
+                    raise
+                questions.append(f'Lote {batch_number}: cuota del proveedor de IA agotada temporalmente; se empleó análisis estático verificable.')
+                payload = {'summary':'Análisis estructural de contingencia por cuota agotada en el proveedor de IA.','business_rules':[
+                    {'statement':f"Módulo `{f['module']}` contiene el componente `{f['path']}` ({f['language']}, {f['lines']} líneas).",'evidence':[{'file':f['path'],'line':1}]}
+                    for f in list(index.values())[:6] if f.get('selected')
+                ],'questions':['Cuota de IA alcanzada: reintenta cuando se renueve el límite o usa las evidencias estáticas.']}
             if payload is None:
                 raw_failed+=1;questions.append(f'Lote {batch_number}: la IA no devolvió JSON válido; revisar el informe de errores.')
                 continue

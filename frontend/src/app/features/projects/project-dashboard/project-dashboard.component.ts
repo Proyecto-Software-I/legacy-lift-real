@@ -26,14 +26,34 @@ import { VerifyResultComponent } from '../../migration/verify-result/verify-resu
 export class ProjectDashboardComponent {
   readonly vm = inject(WorkspaceFacade);
   readonly workspaceTabs = [
-    {id:'source',label:'Fuente',icon:'upload_file'},
-    {id:'discover',label:'Discover',icon:'manage_search'},
-    {id:'understand',label:'Understand',icon:'account_tree'},
-    {id:'assess',label:'Assess',icon:'monitor_heart'},
-    {id:'plan',label:'Plan',icon:'schema'},
-    {id:'baseline',label:'Baseline',icon:'fact_check'},
-    {id:'modernize',label:'Modernize',icon:'auto_fix_high'},
-    {id:'verify',label:'Verify',icon:'verified'},
-    {id:'evidence',label:'Evidencias',icon:'folder_open'}
+    {id:'source',label:'Fuente',icon:'upload_file',group:'INGESTA'},
+    {id:'discover',label:'Discover',icon:'manage_search',group:'S2 · ANÁLISIS'},
+    {id:'understand',label:'Understand',icon:'account_tree',group:'S2 · ANÁLISIS'},
+    {id:'assess',label:'Assess',icon:'monitor_heart',group:'S2 · ANÁLISIS'},
+    {id:'plan',label:'Plan',icon:'schema',group:'S3 · PLAN'},
+    {id:'baseline',label:'Baseline',icon:'fact_check',group:'S3 · PLAN'},
+    {id:'modernize',label:'Modernize',icon:'auto_fix_high',group:'S4 · EJECUCIÓN'},
+    {id:'verify',label:'Verify',icon:'verified',group:'S4 · EJECUCIÓN'},
+    {id:'evidence',label:'Evidencias',icon:'folder_open',group:'ENTREGABLES'}
   ] as const;
+
+  isStageTab(id: string): boolean {
+    return id !== 'source' && id !== 'evidence';
+  }
+
+  tabStatus(id: string): string {
+    if (id === 'source') {
+      if (this.vm.ingestRunning) return 'running';
+      return this.vm.hasSource ? 'completed' : 'ready';
+    }
+    if (id === 'evidence') return this.vm.isStepGateComplete('verify') ? (this.vm.workspaceSection === 'evidence' ? 'ready' : 'completed') : 'locked';
+    return this.vm.stageStatus(id);
+  }
+
+  tabLabelStatus(id: string): string {
+    const st = this.tabStatus(id);
+    if (id === 'source') return st === 'completed' ? 'Completado' : st === 'running' ? 'Importando' : 'Actual';
+    if (id === 'evidence') return st === 'locked' ? 'Pendiente' : st === 'ready' ? 'Actual' : 'Disponible';
+    return this.vm.displayStatus(st, id);
+  }
 }

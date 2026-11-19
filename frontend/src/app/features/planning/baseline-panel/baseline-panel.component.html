@@ -13,19 +13,28 @@
         <ng-template #noTests><p class="caption">Ninguna suite soportada detectada. No se afirma equivalencia.</p></ng-template></div>
       <div class="consent-row"><label class="consent-label"><input type="checkbox" [checked]="info.execution_authorized"
         [disabled]="vm.baselineBusy || vm.isAnyRunning" (change)="vm.authorizeExecution($any($event.target).checked)"/>
-        Autorizo la ejecución de pruebas del repositorio en un worker aislado para esta wave y snapshot.</label>
-        <p class="caption">Modo disponible: {{info.worker_mode}}. Docker local es solo para desarrollo; producción requiere VM separada.</p></div>
-      <div class="case-heading"><h3>Casos propuestos por IA</h3><button llButton variant="secondary" type="button" [disabled]="vm.baselineBusy || project.provider==='demo'"
-        (click)="vm.generateTestSuggestions()"><ll-icon name="auto_awesome" size="sm"/> {{vm.baselineBusy?'Generando...':'Proponer casos'}}</button></div>
-      <p class="caption">Las propuestas aprobadas son especificaciones: no se convierten ni ejecutan automáticamente como código.</p>
-      <div class="cases" *ngIf="info.proposals.length;else noProposals">
-        <article class="case" *ngFor="let item of info.proposals"><div class="case-header"><strong>{{item.data.title}}</strong><ll-status-badge [status]="item.status"/></div>
-          <p>Entrada: {{item.data.input}}</p><p>Esperado: {{item.data.expected}}</p><code>{{item.data.evidence_file}}</code>
-          <div class="actions"><button llButton variant="secondary" type="button" (click)="vm.decideTestProposal(item.id,true)">Aprobar propuesta</button>
-            <button llButton variant="secondary" type="button" (click)="vm.decideTestProposal(item.id,false)">Descartar</button></div>
-        </article></div>
-      <ng-template #noProposals><p class="caption">No hay propuestas. La ejecución Demo no inventa pruebas.</p></ng-template>
-      <p class="caption" *ngIf="vm.latestRun('baseline') as last">Última ejecución: {{last.status}} · {{last.data?.tests?.status || 'sin resultado'}}.</p>
+        <strong>Autorizo la ejecución de pruebas del repositorio en un worker aislado para esta wave y snapshot.</strong></label>
+        <p class="caption">Marca esta casilla antes de ejecutar Baseline para que Docker corra las pruebas y Verify valide la equivalencia automáticamente.</p></div>
+      <div class="baseline-run-card" *ngIf="vm.latestRun('baseline') as last">
+        <div class="baseline-run-head">
+          <strong>Resultado de Behavioral Baseline</strong>
+          <ll-status-badge [status]="last.data?.tests?.status || last.status"/>
+        </div>
+        <p class="caption">Estado: {{last.status}} · Pruebas: {{last.data?.tests?.status || 'sin resultado'}} · Sintaxis: {{(last.data?.static_checks?.total || last.data?.static?.total || 0) - (last.data?.static_checks?.failed || last.data?.static?.failed || 0)}} / {{last.data?.static_checks?.total || last.data?.static?.total || 0}} OK</p>
+        <pre class="baseline-log" *ngIf="last.data?.tests?.output">{{last.data?.tests?.output}}</pre>
+      </div>
+      <details>
+        <summary class="caption" style="cursor:pointer;font-weight:600">Casos propuestos por IA ({{info.proposals.length}}) — opcional</summary>
+        <div class="case-heading" style="margin-top:10px"><h3>Casos propuestos por IA</h3><button llButton variant="secondary" type="button" [disabled]="vm.baselineBusy || project.provider==='demo'"
+          (click)="vm.generateTestSuggestions()"><ll-icon name="auto_awesome" size="sm"/> {{vm.baselineBusy?'Generando...':'Proponer casos'}}</button></div>
+        <div class="cases" *ngIf="info.proposals.length;else noProposals">
+          <article class="case" *ngFor="let item of info.proposals"><div class="case-header"><strong>{{item.data.title}}</strong><ll-status-badge [status]="item.status"/></div>
+            <p>Entrada: {{item.data.input}} · Esperado: {{item.data.expected}}</p><code>{{item.data.evidence_file}}</code>
+            <div class="actions"><button llButton variant="secondary" type="button" (click)="vm.decideTestProposal(item.id,true)">Aprobar propuesta</button>
+              <button llButton variant="secondary" type="button" (click)="vm.decideTestProposal(item.id,false)">Descartar</button></div>
+          </article></div>
+        <ng-template #noProposals><p class="caption">No hay propuestas generadas.</p></ng-template>
+      </details>
     </ng-container>
   </ng-container>
   <ng-template #noApproval><p class="caption">Consulta el estado de la wave seleccionada para preparar el baseline.</p></ng-template>

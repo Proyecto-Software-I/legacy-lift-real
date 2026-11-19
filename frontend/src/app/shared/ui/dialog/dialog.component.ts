@@ -27,6 +27,10 @@ export class DialogComponent {
   }
   cancel(event: Event): void { event.preventDefault(); this.closed.emit(); }
   onDialogClick(event: MouseEvent): void {
+    // Only consider clicks whose target is the <dialog> element itself (backdrop area).
+    // Native <select>/<option> popups fire clicks with target inside the dialog and clientX/Y=0 or outside rect.
+    if (event.target !== event.currentTarget) return;
+    if (event.clientX === 0 && event.clientY === 0) return;
     const rect = (event.currentTarget as HTMLDialogElement).getBoundingClientRect();
     if (event.clientX < rect.left || event.clientX > rect.right ||
         event.clientY < rect.top || event.clientY > rect.bottom) this.closed.emit();

@@ -8,7 +8,6 @@
           [attr.title]="vm.theme === 'dark' ? 'Tema claro' : 'Tema oscuro'">
           <ll-icon [name]="vm.theme === 'dark' ? 'light_mode' : 'dark_mode'"/>
         </button>
-        <span class="environment"><span class="environment-dot"></span> Entorno local</span>
         <button type="button" class="icon-action" title="Ayuda" aria-label="Abrir guía rápida" (click)="vm.showHelp=true"><ll-icon name="help"/></button>
         <span class="topbar-avatar" [attr.aria-label]="'Usuario: '+vm.currentUser">{{vm.userInitial}}</span></div>
     </header>

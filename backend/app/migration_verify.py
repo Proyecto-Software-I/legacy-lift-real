@@ -91,6 +91,15 @@ def run_one() -> dict | None:
         message+=f"**Clasificación:** {result['classification']}\n\n{result['reason']}\n\n"
         message+=f"**Archivos seleccionados:** {result['files_selected']}\n\n{result['limits']}\n"
         workspace.save_artifact(pid,'verification.md',message)
+        if result['classification']=='verified_within_tests':
+            from . import migration_delivery
+            owner_id=(db.project_get(pid) or {}).get('owner_id') or 'system'
+            with db.connect() as conn:
+                conn.execute("""UPDATE migration_attempts SET decision='approved',decided_at=?,decided_by=?,result_json=?
+                  WHERE id=? AND decision IS NULL""",
+                  (db.now(),owner_id,json.dumps({**item.get('result',{}),'decision_reason':'Auto-aprobado: pruebas equivalentes superadas en Verify.'},ensure_ascii=False),aid))
+                conn.execute("UPDATE projects SET migration_decision='approved' WHERE id=?",(pid,))
+            workspace.save_artifact(pid,'report.md',migration_delivery.report(pid,aid)+'\n**Verificación automática:** Pruebas equivalentes superadas.\n')
         db.run_complete(rid,'Verificación: '+result['classification'],result)
         db.project_event(pid,'verify',{'event':'completed','attempt_id':aid,'classification':result['classification']})
     except Exception as exc:

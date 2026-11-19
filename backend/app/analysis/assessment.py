@@ -75,10 +75,19 @@ def assess(pid: str,provider: str,template: str,source: Path) -> tuple[str,dict]
                 '\n# Understand resumido\n'+str(knowledge.get('summary',''))[:1800]+
                 '\n# Código seleccionado\n'+'\n'.join(selected))
         db.project_event(pid,'analysis-stage',{'phase':'assess','stage':'ai_recommendations','progress':65})
-        if provider=='codex':
-            with scoped_workspace(pid,source) as isolated:output=ai.generate(provider,prompt,isolated)
-        else:output=ai.generate(provider,prompt,source)
-        parsed=_json_object(output)
+        try:
+            if provider=='codex':
+                with scoped_workspace(pid,source) as isolated:output=ai.generate(provider,prompt,isolated)
+            else:output=ai.generate(provider,prompt,source)
+            parsed=_json_object(output)
+        except ai.AIError as exc:
+            if 'usage limit' not in str(exc).lower() and 'quota' not in str(exc).lower():
+                raise
+            docs['limits'].append('Cuota del proveedor de IA agotada temporalmente; se generaron recomendaciones de contingencia basadas en evidencia estática.')
+            parsed={'recommendations':[
+                {'module':f['module'],'strategy':'Refactor','reason':f"Refactorización conservadora sugerida sobre `{f['path']}` manteniendo contratos.",'evidence':[{'file':f['path'],'line':1}]}
+                for f in source_files[:4]
+            ],'questions':['Verificar alcance antes de aprobar wave.']}
         if parsed is None:
             docs['limits'].append('La IA no devolvió JSON válido; solo se conservan hallazgos estáticos.')
         else:

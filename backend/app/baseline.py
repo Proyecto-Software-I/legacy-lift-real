@@ -78,14 +78,28 @@ def suggest(pid:str)->list[dict]:
       'Devuelve SOLO JSON {"cases":[{"title":"...","input":"...","expected":"...","evidence_file":"..."}]}. '
       'Cada evidence_file debe ser uno de estos archivos reales: '+json.dumps(wave['files'])+'\n'
       'Contexto: '+str(db.analysis_get(pid,project['active_snapshot_id'],'understand') or {})[:2600])
-    if project['provider']=='codex':
-        with analysis_context.scoped_workspace(pid,workspace.project_source(pid)) as isolated:
-            response=ai.generate('codex',prompt,isolated)
-    else:response=ai.generate('claude',prompt,workspace.project_source(pid))
-    match=re.search(r'\{[\s\S]*\}',response)
-    try:data=json.loads(match.group(0)) if match else {}
-    except json.JSONDecodeError:data={}
-    entries=data.get('cases') if isinstance(data,dict) else None
+    try:
+        if project['provider']=='codex':
+            with analysis_context.scoped_workspace(pid,workspace.project_source(pid)) as isolated:
+                response=ai.generate('codex',prompt,isolated)
+        else:response=ai.generate('claude',prompt,workspace.project_source(pid))
+        match=re.search(r'\{[\s\S]*\}',response)
+        try:data=json.loads(match.group(0)) if match else {}
+        except json.JSONDecodeError:data={}
+        entries=data.get('cases') if isinstance(data,dict) else None
+    except ai.AIError as exc:
+        if 'usage limit' not in str(exc).lower() and 'quota' not in str(exc).lower():
+            raise ValueError(str(exc)) from exc
+        entries=[]
+        for rel in wave['files'][:4]:
+            p=workspace.project_source(pid)/rel
+            if p.is_file():
+                entries.append({
+                    'title':f'Verificar contrato público de {rel}',
+                    'input':f'Entradas límite y válidas sobre {rel}',
+                    'expected':'Misma salida y excepciones antes y después de refactorizar',
+                    'evidence_file':rel,
+                })
     if not isinstance(entries,list):return proposals(pid)
     for case in entries[:8]:
         if not isinstance(case,dict):continue

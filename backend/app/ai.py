@@ -33,11 +33,25 @@ def codex_run(prompt: str, workspace: Path, edit: bool = False) -> str:
     cli = os.getenv('CODEX_BIN', 'codex')
     if shutil.which(cli) is None:
         raise AIError('Codex CLI no encontrado. Instala @openai/codex y ejecuta codex login en este PC.')
-    cmd = [cli, 'exec', '--cd', str(workspace), '--sandbox', 'workspace-write' if edit else 'read-only',
+    model = os.getenv('CODEX_MODEL', 'gpt-6.1-sol').strip() or 'gpt-6.1-sol'
+    env = os.environ.copy()
+    # When ~/.codex is mounted read-only (inside the hardened migration-worker container),
+    # copy auth.json & config.toml to writable /tmp/codex-home and disable nested bwrap
+    # (Docker cap_drop: ALL blocks nested user namespaces inside the container sandbox).
+    ro_home = Path.home() / '.codex'
+    if (ro_home / 'auth.json').is_file() and not os.access(ro_home, os.W_OK):
+        rw_home = Path('/tmp/codex-home')
+        rw_home.mkdir(parents=True, exist_ok=True)
+        for fname in ('auth.json', 'config.toml'):
+            if (ro_home / fname).is_file():
+                shutil.copy2(ro_home / fname, rw_home / fname)
+        env['CODEX_HOME'] = str(rw_home)
+    cmd = [cli, 'exec', '-m', model, '-c', 'model_reasoning_effort="low"',
+           '--cd', str(workspace), '--sandbox', 'read-only',
            '--skip-git-repo-check', '-']
     try:
         result = subprocess.run(cmd, input=prompt, text=True, encoding='utf-8', errors='replace',
-                                stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=330, check=False)
+                                env=env, stdout=subprocess.PIPE, stderr=subprocess.PIPE, timeout=330, check=False)
     except subprocess.TimeoutExpired as exc:
         raise AIError('Codex excedió el límite de 330 segundos') from exc
     if result.returncode:
@@ -72,12 +86,12 @@ def generate(provider: str, prompt: str, workspace: Path, edit: bool = False) ->
 
 
 def parse_edit_result(text: str) -> list[dict]:
-    # Claude returns full replacement content for explicitly chosen files.
-    candidate = text.strip()
-    if candidate.startswith('```'):
-        candidate = '\n'.join(candidate.splitlines()[1:-1]).strip()
+    # Extract structured JSON replacement content for explicitly chosen files.
+    from .analysis.understanding import _json_object
     try:
-        doc = json.loads(candidate)
+        doc = _json_object(text)
+        if not isinstance(doc, dict):
+            raise ValueError('No se encontró JSON válido')
         changes = doc['changes']
         if not isinstance(changes, list) or len(changes) > 5:
             raise ValueError('Máximo cinco cambios')
@@ -86,4 +100,4 @@ def parse_edit_result(text: str) -> list[dict]:
                 raise ValueError('Formato de cambio inválido')
         return changes
     except (json.JSONDecodeError, KeyError, TypeError, ValueError) as exc:
-        raise AIError('Claude no devolvió un JSON de cambios válido. No se alteró el candidato.') from exc
+        raise AIError('El modelo no devolvió un JSON de cambios válido. No se alteró el candidato.') from exc

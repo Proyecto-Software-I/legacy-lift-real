@@ -230,6 +230,9 @@ export class WorkspaceFacade {
   private readonly _analysisBusy = signal<boolean>(false);
   get analysisBusy(): boolean { return this._analysisBusy(); }
   set analysisBusy(value: boolean) { this._analysisBusy.set(value); }
+  private readonly _understandData = signal<Record<string,any> | null>(null);
+  get understandData(): Record<string,any> | null { return this._understandData(); }
+  set understandData(value: Record<string,any> | null) { this._understandData.set(value); }
   private readonly _assessmentData = signal<AssessmentData | null>(null);
   get assessmentData(): AssessmentData | null { return this._assessmentData(); }
   set assessmentData(value: AssessmentData | null) { this._assessmentData.set(value); }
@@ -278,7 +281,7 @@ export class WorkspaceFacade {
     this.mobileNavOpen=false;this.projects=[];this.organizations=[];this.createOrganizationId='';this.providers=[];this.selected=undefined;
     this.snapshots=[];this.ingestJobs=[];this.githubConfigured=false;this.githubLogin='';this.githubRepos=[];this.selectedRepo='';
     this.discoverData=null;this.scanProgress=null;this.sourceFiles=[];this.selectedFilePaths=new Set();
-    this.reviews=[];this.reviewDraft={};this.assessmentData=null;this.assessmentProgress=null;this.blueprint=null;this.blueprintDraft=null;this.packs=null;this.baselinePreflight=null;this.migrationAttempts=[];this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.migrationRiskReason='';this.migrationWorkerSeen=null;this.workspaceSection='source';
+    this.reviews=[];this.reviewDraft={};this.understandData=null;this.assessmentData=null;this.assessmentProgress=null;this.blueprint=null;this.blueprintDraft=null;this.packs=null;this.baselinePreflight=null;this.migrationAttempts=[];this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';this.migrationRiskReason='';this.migrationWorkerSeen=null;this.workspaceSection='source';
     this.artifactContent='';this.artifactName='';this.rendered='';this.showCreate=false;this.showEdit=false;this.showHelp=false;
     this.createName='';this.createSystem='';this.projectQuery='';this.stageId='discover';
     this.error='';this.notice='';this.busy=false;this.uploading=false;this.analysisBusy=false;
@@ -297,19 +300,63 @@ export class WorkspaceFacade {
     });
   }
 
+  private static readonly STEP_ORDER = ['source','discover','understand','assess','plan','baseline','modernize','verify','evidence'] as const;
+
+  isStepGateComplete(id: string): boolean {
+    if (!this.selected) return false;
+    if (id === 'source') return this.hasSource && !this.ingestRunning;
+    if (id === 'discover') return this.isStepGateComplete('source') && this.latestRun('discover')?.status === 'completed';
+    if (id === 'understand') return this.isStepGateComplete('discover') && this.latestRun('understand')?.status === 'completed';
+    if (id === 'assess') return this.isStepGateComplete('understand') && this.latestRun('assess')?.status === 'completed';
+    if (id === 'plan') return this.isStepGateComplete('assess') && this.latestRun('plan')?.status === 'completed' && this.selected.plan_approved === 1 && !!this.selected.active_wave_id;
+    if (id === 'baseline') return this.isStepGateComplete('plan') && this.latestRun('baseline')?.status === 'completed';
+    if (id === 'modernize') return this.isStepGateComplete('baseline') && this.latestRun('modernize')?.status === 'completed' && this.latestMigration?.status === 'completed';
+    if (id === 'verify') {
+      const v = this.latestMigration?.verification;
+      return this.isStepGateComplete('modernize') && this.latestRun('verify')?.status === 'completed' && this.latestMigration?.verify_status === 'completed' && (v?.classification === 'verified_within_tests' || this.selected.migration_decision === 'approved');
+    }
+    if (id === 'evidence') return this.isStepGateComplete('verify');
+    return false;
+  }
+
+  canNavigateTo(section: string): boolean {
+    if (section === 'source') return true;
+    const idx = WorkspaceFacade.STEP_ORDER.indexOf(section as any);
+    if (idx <= 0) return true;
+    return this.isStepGateComplete(WorkspaceFacade.STEP_ORDER[idx - 1]);
+  }
+
+  get nextStepId(): string | null {
+    const idx = WorkspaceFacade.STEP_ORDER.indexOf(this.workspaceSection as any);
+    if (idx < 0 || idx >= WorkspaceFacade.STEP_ORDER.length - 1) return null;
+    return WorkspaceFacade.STEP_ORDER[idx + 1];
+  }
+
+  get nextStepLabel(): string {
+    const next = this.nextStepId;
+    if (!next) return '';
+    if (next === 'evidence') return 'Evidencias';
+    return STAGES.find(s => s.id === next)?.label || next;
+  }
+
+  get canAdvanceNext(): boolean {
+    const next = this.nextStepId;
+    return !!next && this.canNavigateTo(next) && !this.isAnyRunning && !this.ingestRunning;
+  }
+
+  advanceToNextStep(): void {
+    const next = this.nextStepId;
+    if (next && this.canNavigateTo(next)) {
+      this.chooseWorkspaceSection(next);
+    }
+  }
+
   get stages(): StageView[] {
-    return STAGES.map(s => {
-      const latest = this.latestRun(s.id);
-      const status = latest?.status === 'running' ? 'running'
-          : latest?.status === 'completed' ? 'completed'
-          : latest?.status === 'failed' ? 'failed'
-          : this.selected?.phase_ready?.[s.id] ? 'ready' : 'locked';
-      return {...s, status};
-    });
+    return STAGES.map(s => ({...s, status: this.stageStatus(s.id) as any}));
   }
   get activeStep() { return STAGES.find(s => s.id === this.stageId) ?? STAGES[0]; }
   get activeRun(): Run | undefined { return this.latestRun(this.stageId); }
-  get completedCount(): number { return STAGES.filter(s => this.latestRun(s.id)?.status === 'completed').length; }
+  get completedCount(): number { return STAGES.filter(s => this.stageStatus(s.id) === 'completed').length; }
   get ingestRunning(): boolean { return this.ingestJobs.some(j=>j.status==='queued'||j.status==='running'); }
   get hasSource(): boolean { return !!this.selected?.snapshot_hash; }
   get planReady(): boolean { return this.latestRun('plan')?.status === 'completed' && this.selected?.plan_approved == null; }
@@ -321,9 +368,57 @@ export class WorkspaceFacade {
   latestRun(stage: string): Run | undefined {
     return [...(this.selected?.runs || [])].reverse().find(r => r.phase === stage);
   }
-  stageStatus(stage: string): string { return this.latestRun(stage)?.status || 'pending'; }
-  displayStatus(status: string): string {
-    return ({completed:'Completado',running:'Ejecutando',failed:'Error',ready:'Disponible',locked:'Bloqueado',pending:'Pendiente'} as Record<string,string>)[status] || status;
+  stageStatus(stage: string): string {
+    const latest = this.latestRun(stage);
+    if (latest?.status === 'running') return 'running';
+    if (stage === 'modernize' && (this.latestMigration?.status === 'queued' || this.latestMigration?.status === 'running')) return 'running';
+    if (stage === 'verify' && (this.latestMigration?.verify_status === 'queued' || this.latestMigration?.verify_status === 'running')) return 'running';
+    if (latest?.status === 'failed') return 'failed';
+    if (stage === 'modernize' && this.latestMigration?.status === 'failed') return 'failed';
+    if (stage === 'verify' && (this.latestMigration?.verify_status === 'failed' || this.latestMigration?.verification?.classification === 'divergent')) return 'failed';
+    if (!this.canNavigateTo(stage)) return 'locked';
+    if (stage === 'verify') {
+      return this.isStepGateComplete('verify') ? 'completed' : 'ready';
+    }
+    if (!this.isStepGateComplete(stage)) return 'ready';
+    return 'completed';
+  }
+  displayStatus(status: string, stage?: string): string {
+    if (status === 'completed' && stage === 'verify' && this.latestMigration?.verification?.classification === 'verified_within_tests') {
+      return 'Correcto';
+    }
+    return ({completed:'Completado',running:'Ejecutando',failed:'Error',ready:'Actual',locked:'Pendiente',pending:'Pendiente'} as Record<string,string>)[status] || status;
+  }
+  get currentPhaseTitle(): string {
+    if (this.workspaceSection === 'source') return 'Paso 0 · Código Fuente';
+    if (this.workspaceSection === 'evidence') return 'Entregables y Evidencias';
+    const step = this.activeStep;
+    return `Paso ${step.index} · ${step.label}`;
+  }
+  get currentPhaseFeedback(): string {
+    if (!this.selected) return '';
+    if (this.ingestRunning) return `Importando y escaneando fuente (${this.scanProgress?.percent || 0}%)…`;
+    if (!this.hasSource) return 'Sube un archivo ZIP o usa un ejemplo para iniciar.';
+    if (this.isAnyRunning) {
+      const running = [...(this.selected.runs || [])].reverse().find(r => r.status === 'running');
+      return `Ejecutando ${(running?.phase || this.stageId).toUpperCase()}…`;
+    }
+    const sec = this.workspaceSection;
+    if (sec === 'source') return 'Fuente lista. Avanza al paso 1 (Discover) para revisar el inventario.';
+    if (sec === 'evidence') return `${this.selected.artifacts?.length || 0} artefactos listos para consulta y descarga.`;
+    if (this.stageId === 'plan' && this.latestRun('plan')?.status === 'completed') {
+      if (this.selected.plan_approved !== 1) return 'Paso actual: Aprueba el Blueprint para continuar.';
+      if (!this.selected.active_wave_id) return 'Paso actual: Aprueba una Wave compatible para desbloquear Baseline.';
+    }
+    if (this.stageId === 'verify' && this.isStepGateComplete('verify')) {
+      return this.latestMigration?.verification?.classification === 'verified_within_tests'
+        ? 'Verificación correcta: todas las pruebas equivalentes pasaron antes y después.'
+        : 'Verificación aprobada. Puedes descargar los entregables.';
+    }
+    if (this.isStepGateComplete(this.stageId)) {
+      return `Resultado listo. Revisa la información y avanza a ${this.nextStepLabel}.`;
+    }
+    return `Paso actual: Pulsa «Ejecutar ${this.activeStep.label}» para procesar esta fase.`;
   }
   readableDate(value?: string): string {
     return value ? new Date(value).toLocaleString('es-BO', {dateStyle:'short',timeStyle:'short'}) : '—';
@@ -453,11 +548,14 @@ export class WorkspaceFacade {
     if (!token) return;
     const requestId = ++this.selectedRequestId;
     this.eventsAbort?.abort();this.lastEventId=0;this.ingestJobs=[];
-    this.discoverData=null;this.scanProgress=null;this.sourceFiles=[];this.reviews=[];this.assessmentData=null;this.assessmentProgress=null;this.selectedFilePaths=new Set();
+    this.discoverData=null;this.scanProgress=null;this.sourceFiles=[];this.reviews=[];this.understandData=null;this.assessmentData=null;this.assessmentProgress=null;this.selectedFilePaths=new Set();
     this.selected = undefined; this.artifactContent=''; this.artifactName=''; this.stageId='discover';this.workspaceSection='source';
     this.api.project(pid).subscribe({next:p=>{
       if(this.session.token!==token || requestId!==this.selectedRequestId) return;
-      this.selected=p; this.pickFirstArtifact(); this.loadSnapshots(pid);this.loadJobs(pid);this.loadDiscover(pid);this.loadAnalysisControls(pid);this.loadReviews(pid);this.loadAssessment(pid);this.loadBlueprint(pid);this.loadBaselinePreflight(pid);this.loadMigration(pid);this.connectEvents(pid);
+      this.selected=p; this.pickFirstArtifact(); this.loadSnapshots(pid);this.loadJobs(pid);this.loadDiscover(pid);this.loadAnalysisControls(pid);this.loadReviews(pid);this.loadUnderstand(pid);this.loadAssessment(pid);this.loadBlueprint(pid);this.loadBaselinePreflight(pid);this.loadMigration(pid,true);this.connectEvents(pid);
+      const currentStep = WorkspaceFacade.STEP_ORDER.find(s => !this.isStepGateComplete(s)) || 'verify';
+      this.workspaceSection = currentStep;
+      if (STAGES.some(x => x.id === currentStep)) this.stageId = currentStep;
     },error:e=>{if(this.session.token===token)this.showError(e);}});
   }
   refreshSelected(silent=false): void {
@@ -471,10 +569,10 @@ export class WorkspaceFacade {
       this.selected=updated;
       if (!silent || sourceChanged) { this.loadSnapshots(pid);this.loadJobs(pid); }
       this.loadMigration(pid);
-      if (sourceChanged) {this.blueprint=null;this.blueprintDraft=null;this.baselinePreflight=null;this.pickFirstArtifact();this.loadDiscover(pid);this.loadAnalysisControls(pid);this.loadReviews(pid);this.loadAssessment(pid);}
+      if (sourceChanged) {this.blueprint=null;this.blueprintDraft=null;this.baselinePreflight=null;this.pickFirstArtifact();this.loadDiscover(pid);this.loadAnalysisControls(pid);this.loadReviews(pid);this.loadUnderstand(pid);this.loadAssessment(pid);}
       if (hadRunning && !this.isAnyRunning) {
         if (this.activeRun?.status === 'completed') {
-          this.toast('Fase completada; consulta el artefacto generado.');this.loadReviews(pid);this.loadAssessment(pid);this.loadBlueprint(pid);
+          this.toast('Fase completada; consulta el artefacto generado.');this.loadReviews(pid);this.loadUnderstand(pid);this.loadAssessment(pid);this.loadBlueprint(pid);
           this.openArtifact(this.activeStep.file);
         } else if (this.activeRun?.status === 'failed') {
           this.error=this.activeRun.error || 'La operación falló';
@@ -489,6 +587,10 @@ export class WorkspaceFacade {
     else if (arr.length) this.openArtifact(arr[0]);
   }
   chooseStage(id: string): void {
+    if (!this.canNavigateTo(id)) {
+      this.toast('Completa primero el paso actual antes de avanzar.');
+      return;
+    }
     this.stageId=id;this.workspaceSection=id;
     const step=STAGES.find(x=>x.id===id);
     if (step && this.selected?.artifacts?.includes(step.file)) this.openArtifact(step.file);
@@ -554,6 +656,12 @@ export class WorkspaceFacade {
     } catch(e) { if(!controller.signal.aborted) { /* polling fallback */ } }
   }
   get isAssessRunning():boolean {return this.latestRun('assess')?.status==='running';}
+  loadUnderstand(pid:string):void {
+    this.api.analysisPhase(pid,'understand').subscribe({next:r=>{
+      if(this.selected?.id===pid && this.selected.active_snapshot_id===r.snapshot_id)
+        this.understandData=r.data;
+    },error:()=>{/* No snapshot or understand yet. */}});
+  }
   loadAssessment(pid:string):void {
     this.api.analysisPhase(pid,'assess').subscribe({next:r=>{
       if(this.selected?.id===pid && this.selected.active_snapshot_id===r.snapshot_id)
@@ -667,6 +775,19 @@ export class WorkspaceFacade {
       }, error: e => this.showError(e)
     });
   }
+  loadCobolDemo(): void {
+    if (!this.selected || this.uploading) return;
+    const pid = this.selected.id; this.uploading = true; this.scanProgress = null;
+    this.api.demoCobolZip().subscribe({
+      next: blob => {
+        const file = new File([blob], 'demo-cobol.zip', {type: 'application/zip'});
+        this.api.upload(pid, file).subscribe({
+          next: job => { this.uploading = false; this.toast(`Ejemplo COBOL: ingesta ${job.id.slice(0,8)} en ejecución.`); this.loadJobs(pid); },
+          error: e => this.showError(e)
+        });
+      }, error: e => this.showError(e)
+    });
+  }
   run(): void {
     if (!this.selected || !this.stageRunnable) return;
     this.busy=true;
@@ -683,6 +804,10 @@ export class WorkspaceFacade {
     },error:()=>{/* Older version or plan not generated. */}});
   }
   chooseWorkspaceSection(section:string):void {
+    if (!this.canNavigateTo(section)) {
+      this.toast('Completa primero el paso actual antes de avanzar.');
+      return;
+    }
     this.workspaceSection=section;
     if(STAGES.some(stage=>stage.id===section))this.chooseStage(section);
   }
@@ -749,12 +874,17 @@ export class WorkspaceFacade {
       error:e=>this.showError(e)
     });
   }
-  loadMigration(pid:string):void {
+  loadMigration(pid:string, focusActiveStep=false):void {
     this.api.migrationAttempts(pid).subscribe({next:r=>{
       if(this.selected?.id!==pid)return;
       const previous=this.latestMigration?.id;
       this.migrationAttempts=r.attempts;
       this.migrationWorkerSeen=r.worker?.last_seen ?? null;
+      if (focusActiveStep) {
+        const currentStep = WorkspaceFacade.STEP_ORDER.find(s => !this.isStepGateComplete(s)) || 'verify';
+        this.workspaceSection = currentStep;
+        if (STAGES.some(x => x.id === currentStep)) this.stageId = currentStep;
+      }
       const active=this.latestMigration;
       if(!active || active.status!=='completed') {this.migrationReview=null;this.migrationDiffFile='';this.migrationDiffText='';return;}
       if(previous!==active.id){this.migrationDiffFile='';this.migrationDiffText='';}

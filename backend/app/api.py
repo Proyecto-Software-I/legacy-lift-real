@@ -399,7 +399,10 @@ def start_phase(pid: str, phase: str, user: dict = Depends(current_user)) -> dic
         if phase == 'modernize':
             return migration_runs.enqueue(pid,user['id'])
         if phase == 'verify':
-            return migration_verify.enqueue(pid)
+            res = migration_verify.enqueue(pid)
+            if os.getenv('LEGACYLIFT_WORKER_MODE','disabled').lower() == 'docker-local' and os.getenv('LEGACYLIFT_VERIFY_IN_HOST','false').lower() == 'true':
+                pipeline.executor.submit(migration_verify.run_one)
+            return res
         return pipeline.start(pid, phase)
     except ValueError as exc:
         raise HTTPException(409, str(exc)) from exc

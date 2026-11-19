@@ -14,6 +14,7 @@
                 <input #zipInput type="file" hidden accept=".zip,application/zip" (change)="vm.upload($event)" aria-label="Archivo ZIP del código fuente"/>
                 <button llButton variant="primary" type="button" (click)="zipInput.click()" [disabled]="vm.uploading || vm.busy || vm.isAnyRunning || vm.ingestRunning"><ll-icon name="upload_file"/> {{vm.hasSource?'Importar otro ZIP':'Seleccionar ZIP'}}</button>
                 <button llButton variant="secondary" type="button" (click)="vm.loadDemo()" [disabled]="vm.uploading || vm.ingestRunning"><ll-icon name="science"/> Usar proyecto de ejemplo</button>
+                <button llButton variant="secondary" type="button" (click)="vm.loadCobolDemo()" [disabled]="vm.uploading || vm.ingestRunning"><ll-icon name="terminal"/> Usar ejemplo COBOL</button>
               </div>
               <p class="help-text"><ll-icon name="info" size="sm"/> ZIP hasta 64 MB, 5000 archivos por defecto (configurable). Evita incluir secretos o credenciales.</p>
 

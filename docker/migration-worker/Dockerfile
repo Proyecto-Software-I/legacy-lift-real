@@ -1,7 +1,7 @@
 # Separate service: not a substitute for a VM sandbox against hostile code.
 FROM node:22-bookworm-slim AS runtime
 RUN apt-get update && apt-get install -y --no-install-recommends python3 python3-venv ca-certificates && rm -rf /var/lib/apt/lists/*
-RUN npm install --global @openai/codex@0.91.0
+RUN npm install --global @openai/codex@0.170.0
 WORKDIR /service
 COPY backend/requirements.txt /service/requirements.txt
 RUN python3 -m venv /opt/venv && /opt/venv/bin/pip install --no-cache-dir -r /service/requirements.txt

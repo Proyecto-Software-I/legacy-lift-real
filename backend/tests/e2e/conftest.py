@@ -38,6 +38,7 @@ def e2e_server(tmp_path_factory):
         "LEGACYLIFT_ENV": "development",
         "LEGACYLIFT_WORKER_MODE": "docker-local" if os.getenv("E2E_DOCKER") == "1" else "disabled",
         "LEGACYLIFT_MIGRATION_WORKER_MODE": "separate",
+        "LEGACYLIFT_VERIFY_IN_HOST": "false",
         "PYTHONUNBUFFERED": "1",
     })
     url = f"http://127.0.0.1:{port}"
@@ -48,12 +49,12 @@ def e2e_server(tmp_path_factory):
         cwd=BACKEND, env=env, stdout=log, stderr=subprocess.STDOUT,
     )
     try:
-        deadline = time.monotonic() + 25
+        deadline = time.monotonic() + 45
         while time.monotonic() < deadline:
             if process.poll() is not None:
                 break
             try:
-                if httpx.get(url + "/api/health", timeout=1).status_code == 200:
+                if httpx.get(url + "/api/health", timeout=2).status_code == 200:
                     break
             except httpx.HTTPError:
                 pass

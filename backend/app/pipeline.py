@@ -173,7 +173,7 @@ def _validate_changed_paths(pid: str) -> list[str]:
     # New/deleted files, symlinks and modification of tests or config are denied in MVP.
     if before != after or any(f.is_symlink() for f in candidate.rglob('*')):
         raise ValueError('El modelo creó/eliminó archivos o enlaces no permitidos; candidato descartado')
-    allowed = {'.py','.js','.ts','.java','.cs','.go'}
+    allowed = {'.py','.js','.ts','.java','.cs','.go','.cbl','.cob','.cobol','.cpy'}
     for p in changed:
         if p.suffix.lower() not in allowed or any('test' in x.lower() for x in p.parts):
             raise ValueError(f'Cambio fuera del alcance permitido: {p.as_posix()}')
@@ -196,7 +196,7 @@ def _apply_claude_changes(pid: str, content: str) -> None:
         target = src / p
         if not target.exists() or not target.is_file() or target.is_symlink():
             raise ValueError(f'Claude propuso editar archivo inexistente: {p}')
-        if target.suffix not in {'.py','.ts','.js','.java','.cs','.go'} or any('test' in x.lower() for x in p.parts):
+        if target.suffix not in {'.py','.ts','.js','.java','.cs','.go','.cbl','.cob','.cobol','.cpy'} or any('test' in x.lower() for x in p.parts):
             raise ValueError(f'Claude propuso archivo no permitido: {p}')
         if len(item['content'].encode('utf-8')) > 90_000:
             raise ValueError('Archivo propuesto demasiado grande')
@@ -213,15 +213,23 @@ def _modernize_demo(pid: str) -> str:
     if not wave:raise ValueError('No hay wave ejecutable aprobada')
     for rel in wave['files']:
         p=candidate/rel
-        if p.suffix!='.py':continue
         if 'test' in p.relative_to(candidate).parts or 'test' in p.name:
             continue
-        old = p.read_text(encoding='utf-8')
-        new = re.sub(r'\breturn \(([^()\n]+)\)', r'return \1', old, count=1)
-        if new != old:
-            p.write_text(new, encoding='utf-8')
-            return f'Modo demo: paréntesis redundantes simplificados en `{p.relative_to(candidate).as_posix()}`.'
-    return 'No se encontró una transformación determinista del pack safe-refactor-python.'
+        if p.suffix=='.py':
+            old = p.read_text(encoding='utf-8')
+            new = re.sub(r'\breturn \(([^()\n]+)\)', r'return \1', old, count=1)
+            if new != old:
+                p.write_text(new, encoding='utf-8')
+                return f'Modo demo: paréntesis redundantes simplificados en `{p.relative_to(candidate).as_posix()}`.'
+        elif p.suffix.lower() in {'.cbl','.cob','.cobol'}:
+            old = p.read_text(encoding='utf-8')
+            new = re.sub(r'^\s*ADD\s+([A-Z0-9-]+)\s+TO\s+0\s+GIVING\s+([A-Z0-9-]+)\.', r'           MOVE \1 TO \2.', old, count=1, flags=re.M)
+            if new == old:
+                new = re.sub(r'COMPUTE\s+([\w-]+)\s*=\s*\(([^()\n]+)\)', r'COMPUTE \1 = \2', old, count=1)
+            if new != old:
+                p.write_text(new, encoding='utf-8')
+                return f'Modo demo COBOL: expresión aritmética redundante simplificada en `{p.relative_to(candidate).as_posix()}`.'
+    return 'No se encontró una transformación determinista del pack safe-refactor.'
 
 
 def perform(pid: str, phase: str, progress=None) -> tuple[str, dict]:
@@ -250,11 +258,18 @@ def perform(pid: str, phase: str, progress=None) -> tuple[str, dict]:
         prompt, _ = prompt_for(phase, pid)
         if provider == 'demo':
             text=_demo_text(phase,pid)
-        elif provider == 'codex':
-            with analysis_context.scoped_workspace(pid,source) as isolated:
-                text=ai.generate(provider,prompt,isolated)
         else:
-            text=ai.generate(provider,prompt,source)
+            try:
+                if provider == 'codex':
+                    with analysis_context.scoped_workspace(pid,source) as isolated:
+                        text=ai.generate(provider,prompt,isolated)
+                else:
+                    text=ai.generate(provider,prompt,source)
+            except ai.AIError as exc:
+                if phase == 'plan' and ('usage limit' in str(exc).lower() or 'quota' in str(exc).lower()):
+                    text = ''
+                else:
+                    raise
         if phase == 'plan':
             # The AI narrative is advisory. The structured blueprint is constrained by the
             # source snapshot and remains a proposal until explicitly approved.
@@ -278,11 +293,21 @@ def perform(pid: str, phase: str, progress=None) -> tuple[str, dict]:
                 response = _modernize_demo(pid)
             else:
                 prompt, _ = prompt_for('modernize', pid)
-                if provider == 'claude':
-                    response = ai.generate(provider, prompt + '\n\nRESPONDE EXCLUSIVAMENTE JSON: {"changes":[{"path":"ruta/existente.py","content":"contenido completo de reemplazo"}]}. Máximo 5 archivos existentes de código fuente. No edites tests ni configuración.', candidate, edit=True)
+                json_instruction = (
+                    '\n\nIMPORTANTE: NO intentes ejecutar comandos de terminal ni editar archivos directamente con herramientas. '
+                    'Lee el código fuente provisto arriba en este prompt y RESPONDE EXCLUSIVAMENTE UN OBJETO JSON VÁLIDO: '
+                    '{"changes":[{"path":"ruta/existente","content":"contenido completo modernizado del archivo"}]}. '
+                    'Máximo 5 archivos existentes dentro de la wave aprobada. No edites tests ni configuración.'
+                )
+                try:
+                    with analysis_context.scoped_workspace(pid, candidate) as isolated:
+                        response = ai.generate(provider, prompt + json_instruction, isolated, edit=False)
                     _apply_claude_changes(pid, response)
-                else:
-                    response = ai.generate(provider, prompt, candidate, edit=True)
+                except ai.AIError as exc:
+                    if 'usage limit' in str(exc).lower() or 'quota' in str(exc).lower():
+                        response = _modernize_demo(pid) + '\n\n> Nota: Cuota de ChatGPT/Codex agotada durante Modernize; se aplicó el transformador seguro del pack `safe-refactor@1.0`.'
+                    else:
+                        raise
             changed = _validate_changed_paths(pid)
             diff, count = workspace.diff_candidate(pid)
             if not changed or not count:

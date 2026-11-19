@@ -60,10 +60,16 @@ def selected_diff(pid:str,aid:str) -> str:
 
 def decide(pid:str,uid:str,approved:bool,reason:str='') -> dict:
     a=_latest(pid)
-    if a.get('decision'):raise ValueError('El intento ya tiene una decisión irreversible')
+    v=a.get('verification') or {};classification=v.get('classification')
+    if a.get('decision'):
+        if a.get('decision')=='approved' and approved and classification=='verified_within_tests':
+            return migration_runs.get(pid,a['id'])
+        if a.get('decision')=='approved' and not approved and classification=='verified_within_tests':
+            pass
+        else:
+            raise ValueError('El intento ya tiene una decisión irreversible')
     if a.get('verify_status')!='completed' or not a.get('verification') or not a.get('reviewed_sha256'):
         raise ValueError('Antes de decidir ejecuta Verify sobre los archivos seleccionados')
-    v=a['verification'];classification=v.get('classification')
     if approved and classification=='divergent':
         raise ValueError('No se puede aprobar un resultado divergente. Revisa y reintenta la wave.')
     if approved and classification!='verified_within_tests' and len(reason.strip())<20:
@@ -77,7 +83,7 @@ def decide(pid:str,uid:str,approved:bool,reason:str='') -> dict:
         raise ValueError('Cambió la fuente original desde la verificación')
     with db.connect() as conn:
         cur=conn.execute("""UPDATE migration_attempts SET decision=?,decided_at=?,decided_by=?,result_json=?
-          WHERE id=? AND decision IS NULL AND verify_status='completed' """,
+          WHERE id=? AND (decision IS NULL OR decision='approved') AND verify_status='completed' """,
           ('approved' if approved else 'rejected',db.now(),uid,
            json.dumps({**a['result'],'decision_reason':reason.strip()},ensure_ascii=False),a['id']))
         if not cur.rowcount:raise ValueError('La decisión ya fue registrada')

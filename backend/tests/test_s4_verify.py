@@ -36,3 +36,25 @@ def test_comparison_rejects_zero_and_failed_tests():
     assert migration_verify.comparison(old,new)['classification']=='divergent'
     new['tests']={'status':'failed','output':'assert error'}
     assert migration_verify.comparison(old,new)['classification']=='divergent'
+
+
+def test_verified_within_tests_auto_approves_migration(client, monkeypatch):
+    pid, aid = prepared(client)
+    ok_tests = {'status': 'passed', 'exit_code': 0, 'output': 'test_a (t.T) ... ok\n\nRan 1 test in 0.001s\n\nOK'}
+    monkeypatch.setattr(migration_verify.baseline, 'capture', lambda _pid, _f: {
+        'snapshot_id': db.project_get(pid)['active_snapshot_id'],
+        'blueprint_id': db.last_run(pid, 'baseline')['data']['blueprint_id'],
+        'wave_id': db.project_get(pid)['active_wave_id'],
+        'source_hash': db.last_run(pid, 'baseline')['data']['source_hash'],
+        'static_checks': {'total': 2, 'passed': 2, 'failed': 0},
+        'tests': ok_tests,
+    })
+    with db.connect() as conn:
+        row = db.last_run(pid, 'baseline')
+        d = dict(row['data']); d['tests'] = ok_tests
+        conn.execute("UPDATE phase_runs SET data_json=? WHERE id=?", (migration_verify.json.dumps(d), row['id']))
+    assert client.post(f'/api/projects/{pid}/phases/verify', headers=headers()).status_code == 200
+    result = migration_verify.run_one()
+    assert result['verification']['classification'] == 'verified_within_tests'
+    assert result['decision'] == 'approved'
+    assert db.project_get(pid)['migration_decision'] == 'approved'
